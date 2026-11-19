@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using PetFramework.Tools;
 using UnityEngine;
@@ -325,7 +324,7 @@ namespace PetFramework
             chatInput = MakeInputField("ChatInput", inputRow, "和小白说点什么…");
             var irt = chatInput.GetComponent<RectTransform>();
             irt.anchorMin = new Vector2(0, 0); irt.anchorMax = new Vector2(1, 1);
-            irt.offsetMin = new Vector2(0, 0); irt.offsetMax = new Vector2(-196, 0);
+            irt.offsetMin = new Vector2(0, 0); irt.offsetMax = new Vector2(-100, 0);
 
             var send = MakeButton("Send", inputRow, "发送", SendChat, Vector2.zero, new Vector2(88, 40));
             var srt = send.GetComponent<RectTransform>();
@@ -333,72 +332,7 @@ namespace PetFramework
             srt.pivot = new Vector2(1, 0.5f);
             srt.offsetMin = new Vector2(-88, 0); srt.offsetMax = Vector2.zero;
 
-            // 停止按钮：请求进行中才出现
-            var stop = MakeButton("StopChat", inputRow, "■ 停止", StopChat, Vector2.zero, new Vector2(88, 40));
-            var stRt = stop.GetComponent<RectTransform>();
-            stRt.anchorMin = new Vector2(1, 0); stRt.anchorMax = new Vector2(1, 1);
-            stRt.pivot = new Vector2(1, 0.5f);
-            stRt.offsetMin = new Vector2(-184, 0); stRt.offsetMax = new Vector2(-96, 0);
-            chatStopBtn = stop;
-            stop.gameObject.SetActive(false);
-
             return page;
-        }
-
-        // 流式回复的临时行（聊天页里实时显示"小白：……"）
-        GameObject liveRow;
-        Text liveText;
-        string livePrefix;
-        Button chatStopBtn;
-        Coroutine chatWatchdog;
-
-        void StopChat()
-        {
-            if (PetAPI.Instance != null) PetAPI.Instance.CancelAsk();
-            EndLiveRow();
-            if (chatStopBtn != null) chatStopBtn.gameObject.SetActive(false);
-            AddRow("系统", "（已停止这一轮回复。）", false);
-        }
-
-        void StartLiveRow()
-        {
-            if (chatContent == null) return;
-            liveRow = MakeRect("MsgLive", chatContent).gameObject;
-            liveText = liveRow.AddComponent<Text>();
-            liveText.font = font;
-            liveText.fontSize = 15;
-            liveText.supportRichText = true;
-            liveText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            liveText.verticalOverflow = VerticalWrapMode.Overflow;
-            liveText.color = ColText;
-            livePrefix = "<color=#9AD0FF>" + PetProfileConfig.PetName + "：</color> ";
-            liveText.text = livePrefix + "<color=#8C939E>▍</color>";
-            Canvas.ForceUpdateCanvases();
-            if (chatScroll != null) chatScroll.verticalNormalizedPosition = 0f;
-        }
-
-        void EndLiveRow()
-        {
-            if (liveRow != null) Destroy(liveRow);
-            liveRow = null; liveText = null;
-        }
-
-        /// <summary>320 秒还没收到任何回调 → 说明请求/回调链断了，给个明确交代并收尾。</summary>
-        IEnumerator ChatWatchdog()
-        {
-            float t = 0f;
-            while (t < 320f && liveRow != null)
-            {
-                t += Time.unscaledDeltaTime;
-                yield return null;
-            }
-            if (liveRow == null) yield break;      // 正常收到回复了
-            EndLiveRow();
-            if (chatStopBtn != null) chatStopBtn.gameObject.SetActive(false);
-            if (PetAPI.Instance != null) PetAPI.Instance.CancelAsk();
-            AddRow("系统", "（等太久了：这一轮没有收到任何回应（可能是本地模型卡住/端点异常）。"
-                         + "已经自动收尾，可以再发一次，或按停止后重试。）", false);
-            Debug.LogWarning("[PetDashboard] 聊天看门狗触发：320 秒无回调");
         }
 
         void SendChat()
@@ -410,37 +344,11 @@ namespace PetFramework
             chatInput.ActivateInputField();
 
             if (PetAPI.Instance == null) return;
-
-            // ★ 先把主人这句显示出来（等回复期间也有反馈），再挂流式回调
-            EndLiveRow();
-            AddRow(PetProfileConfig.UserName, text.Trim(), false);
-            StartLiveRow();
-            if (chatStopBtn != null) chatStopBtn.gameObject.SetActive(true);
-
-            PetAPI.Instance.onStreamDelta = s =>
-            {
-                if (liveText != null)
-                    liveText.text = livePrefix + PetFramework.MarkdownText.ToRich(s)
-                                    + "<color=#8C939E>▍</color>";
-                if (chatScroll != null) chatScroll.verticalNormalizedPosition = 0f;
-            };
-
-            // ★ 看门狗：万一回调因为异常/服务端怪响应没回来，不能让界面永远停在「小白：▍」。
-            //   liveRow 被 EndLiveRow 销毁 ⇒ 循环自然退出；只有"卡住"时才会触发兜底。
-            if (chatWatchdog != null) StopCoroutine(chatWatchdog);
-            chatWatchdog = StartCoroutine(ChatWatchdog());
-
             PetAPI.Instance.Ask(text.Trim(), reply =>
             {
-                if (PetAPI.Instance != null) PetAPI.Instance.onStreamDelta = null;
-                if (chatStopBtn != null) chatStopBtn.gameObject.SetActive(false);
-                EndLiveRow();
                 if (reply != null && !string.IsNullOrEmpty(reply.text) && TTS.Instance != null)
                     TTS.Speak(reply.text, false);
                 RefreshChat();
-                // ★ 空回复也要给个明确交代，不能"发出去没反应"
-                if (reply == null || string.IsNullOrEmpty(reply.text))
-                    AddRow("系统", "（这一轮没有文字回复 —— 可能只做了动作，或者请求超时了。可以再试一次。）", false);
             });
         }
 
@@ -477,12 +385,6 @@ namespace PetFramework
 
         void AddRow(string role, string text, bool proactive)
         {
-            // 旧存档里可能还留着 play_animation(...) 这类技术行 —— 显示前再洗一遍，洗空了就不显示
-            text = PetFramework.TextTools.ForDisplay(text);
-            if (string.IsNullOrEmpty(text)) return;
-            // 主动搭话如果整句是英文（老存档里那种 "I'm bored and need to move."），不显示
-            if (proactive && PetFramework.TextTools.IsEnglishOnly(text)) return;
-
             var go = MakeRect("Msg", chatContent).gameObject;
             var t = go.AddComponent<Text>();
             t.font = font;
@@ -494,15 +396,12 @@ namespace PetFramework
 
             string who = string.IsNullOrEmpty(role) ? "" : role;
             string prefix;
-            // 主动搭话也按「正常一句话」显示：只留名字，不再写「[小白 凑了过来]」这种标签
-            if (proactive) prefix = "<color=#8C939E>" + PetProfileConfig.PetName + "：</color> ";
+            if (proactive) prefix = "<color=#8C939E>[" + (string.IsNullOrEmpty(who) ? "小白" : who.Replace("（主动）", "")) + " 凑了过来]</color> ";
             else if (who == PetProfileConfig.UserName) prefix = "<color=#5AB0FF>" + who + "：</color> ";
             else if (who == PetProfileConfig.PetName) prefix = "<color=#9AD0FF>" + who + "：</color> ";
             else prefix = "<color=#8C939E>" + who + "：</color> ";
 
-            // 小白的回复走 Markdown；主人自己的话和系统提示保持原样
-            bool aiLine = proactive || who == PetProfileConfig.PetName;
-            t.text = prefix + (aiLine ? PetFramework.MarkdownText.ToRich(text) : text);
+            t.text = prefix + text;
         }
 
         // =====================================================================
@@ -511,8 +410,6 @@ namespace PetFramework
 
         RectTransform settingsPage;
         InputField setBaseUrl, setModel, setApiKey, setPetName, setUserName, setPersona;
-        InputField setVoice, setRate, setPitch, setVolume;
-        Slider sizeSlider;
         Text setStatus;
         Toggle keepPetVisibleToggle;
         Toggle thinkingToggle;
@@ -582,17 +479,6 @@ namespace PetFramework
             sr.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
 
             // 所有控件挂到 content（可滚动区）
-            y -= 8;
-            y = AddLabel(content, "桌宠大小（占屏幕高度 %）", y, 17, ColAccent);
-            var __framing = FindObjectOfType<PetCameraFraming>();
-            float __pct = __framing != null ? __framing.ScreenPercent : 13f;
-            sizeSlider = MakeSlider(content, "大小", 4f, 30f, __pct, v =>
-            {
-                var f = FindObjectOfType<PetCameraFraming>();
-                if (f != null) f.SetScreenPercent(v);
-            }, y);
-            y -= 40;
-
             y = AddLabel(content, "接口配置", y, 17, ColAccent);
             y = AddLabel(content, "BaseUrl（本地 http://localhost:11434 / 云端填到 /v1）", y, 14, ColDim);
             setBaseUrl = AddInput(content, ref y, "");
@@ -624,17 +510,6 @@ namespace PetFramework
             setUserName = AddInput(content, ref y, "");
             y = AddLabel(content, "人设 / 性格（拼进 System Prompt 最前面）", y, 14, ColDim);
             setPersona = AddInput(content, ref y, "", 74);
-
-            y -= 8;
-            y = AddLabel(content, "语音合成（Edge-TTS）", y, 17, ColAccent);
-            y = AddLabel(content, "音色 Voice（如 zh-CN-YunxiNeural / zh-CN-XiaoxiaoNeural）", y, 14, ColDim);
-            setVoice = AddInput(content, ref y, "");
-            y = AddLabel(content, "语速 rate（Edge 格式，如 +8% / -5%）", y, 14, ColDim);
-            setRate = AddInput(content, ref y, "");
-            y = AddLabel(content, "音调 pitch（Edge 格式，如 +12Hz / -10Hz）", y, 14, ColDim);
-            setPitch = AddInput(content, ref y, "");
-            y = AddLabel(content, "音量 volume（Edge 格式，如 +0% / -20%）", y, 14, ColDim);
-            setVolume = AddInput(content, ref y, "");
 
             y -= 4;
             var row = MakeRect("Row", content);
@@ -672,10 +547,6 @@ namespace PetFramework
             setStatus.rectTransform.offsetMax = new Vector2(-16, 0);
             setStatus.rectTransform.anchoredPosition = new Vector2(0, y);
             setStatus.rectTransform.sizeDelta = new Vector2(-32, 26);
-
-            // 按实际内容撑高（加了 TTS 四个输入框 + 大小滑杆后，原来固定 760/820 已经不够，
-            // 后面的行会被 ScrollRect 的遮罩裁掉 —— 表现就是「滑杆看不见」）
-            content.sizeDelta = new Vector2(0, Mathf.Abs(y) + 60);
 
             return page;
         }
@@ -1013,60 +884,6 @@ namespace PetFramework
             return infos[0].clip != null ? infos[0].clip.name : "—";
         }
 
-        // ---------------- TTS 配置（pet_profile.json → tts_config） ----------------
-        static string ProfileJsonPath
-        {
-            get { return System.IO.Path.Combine(PetPathUtil.ExeDir(), "pet_profile.json"); }
-        }
-
-        void RefreshTtsFields()
-        {
-            string v = "zh-CN-YunxiNeural", r = "+8%", p = "+12Hz", vol = "+0%";
-            try
-            {
-                if (System.IO.File.Exists(ProfileJsonPath))
-                {
-                    var root = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(ProfileJsonPath));
-                    var c = root["tts_config"] as Newtonsoft.Json.Linq.JObject;
-                    if (c != null)
-                    {
-                        v = (string)c["voice"] ?? v;
-                        r = (string)c["rate"] ?? r;
-                        p = (string)c["pitch"] ?? p;
-                        vol = (string)c["volume"] ?? vol;
-                    }
-                }
-            }
-            catch (System.Exception e) { Debug.LogWarning("[Dashboard] 读 tts_config 失败：" + e.Message); }
-
-            if (setVoice != null) setVoice.text = v;
-            if (setRate != null) setRate.text = r;
-            if (setPitch != null) setPitch.text = p;
-            if (setVolume != null) setVolume.text = vol;
-        }
-
-        void SaveTtsFields()
-        {
-            try
-            {
-                Newtonsoft.Json.Linq.JObject root = null;
-                if (System.IO.File.Exists(ProfileJsonPath))
-                    root = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(ProfileJsonPath));
-                if (root == null) root = new Newtonsoft.Json.Linq.JObject();
-
-                var c = root["tts_config"] as Newtonsoft.Json.Linq.JObject;
-                if (c == null) { c = new Newtonsoft.Json.Linq.JObject(); root["tts_config"] = c; }
-                if (setVoice != null && !string.IsNullOrEmpty(setVoice.text)) c["voice"] = setVoice.text.Trim();
-                if (setRate != null && !string.IsNullOrEmpty(setRate.text)) c["rate"] = setRate.text.Trim();
-                if (setPitch != null && !string.IsNullOrEmpty(setPitch.text)) c["pitch"] = setPitch.text.Trim();
-                if (setVolume != null && !string.IsNullOrEmpty(setVolume.text)) c["volume"] = setVolume.text.Trim();
-
-                System.IO.File.WriteAllText(ProfileJsonPath, root.ToString(Newtonsoft.Json.Formatting.Indented), new System.Text.UTF8Encoding(false));
-                if (TTS.Instance != null) TTS.Instance.LoadConfigFromProfile();   // 立刻生效
-            }
-            catch (System.Exception e) { Debug.LogWarning("[Dashboard] 写 tts_config 失败：" + e.Message); }
-        }
-
         void RefreshSettings()
         {
             var cfg = PetApiConfig.Instance;
@@ -1086,12 +903,6 @@ namespace PetFramework
             }
             if (keepPetVisibleToggle != null && PetWindowManager.Instance != null)
                 keepPetVisibleToggle.isOn = PetWindowManager.Instance.keepPetVisibleWhenClosed;
-            if (sizeSlider != null)
-            {
-                var fr = FindObjectOfType<PetCameraFraming>();
-                if (fr != null) sizeSlider.SetValueWithoutNotify(fr.ScreenPercent);
-            }
-            RefreshTtsFields();
         }
 
         void SaveSettings()
@@ -1113,7 +924,6 @@ namespace PetFramework
                 prof.persona = setPersona != null ? setPersona.text : prof.persona;
                 prof.SaveAndApply();
             }
-            SaveTtsFields();
             if (setStatus != null) setStatus.text = "已保存并生效";
             RefreshChat();
         }
@@ -1319,21 +1129,8 @@ namespace PetFramework
         //  动态列表控件（给材质页 / 粒子页共用）
         // =====================================================================
 
-        int lastToolCount = -1;
-        float nextToolsRefresh;
-
         void Update()
         {
-            // ★ MCP 是【异步】加载的（uvx 冷启动要几十秒）：工具页开着时，
-            //   只要工具数量变了就自动重建列表 —— 否则打开页面那一刻还是 0，用户看到的就是“没加载出来”。
-            if (pageIndex == 4 && toolsListRoot != null && Time.unscaledTime >= nextToolsRefresh)
-            {
-                nextToolsRefresh = Time.unscaledTime + 1f;
-                var reg0 = ToolRegistry.Instance;
-                int sig = reg0 != null && reg0.All != null ? reg0.All.Count : -1;
-                if (sig != lastToolCount) { lastToolCount = sig; RebuildToolsPage(); }
-            }
-
             // 滑杆拖动 => 标记 dirty => 每帧只套用一次（比每个控件各套一次省得多）
             if (!visualDirty) return;
             visualDirty = false;

@@ -19,7 +19,6 @@ namespace PetFramework
         public string voice = "zh-CN-YunxiNeural";   // 少年感、活泼男声
         public string rate = "+8%";                 // 语速（Edge 字符串格式，如 +8% / -10%）
         public string pitch = "+12Hz";              // 音调（Edge 字符串格式，如 +12Hz）
-        public string volume = "+0%";               // 音量（Edge 字符串格式，如 +0% / -20%）
         public AudioType audioType = AudioType.MPEG; // Edge TTS 默认输出 mp3；若服务返回 wav 改 AudioType.WAV
 
         [Header("重试 / 超时")]
@@ -28,9 +27,6 @@ namespace PetFramework
         public float timeoutSec = 15f;
 
         [Header("自动拉起本地服务（开机忘了开 Python 也能自己救活）")]
-        [Tooltip("本地 TTS 服务端口（要与 url 一致）")]
-        public int port = 8000;
-
         public bool autoStartServer = true;
         [Tooltip("留空 = 自动找：① EXE 旁的 PythonEnv\\python.exe（便携版）② 系统 PATH 里的 python.exe ③ D:\\python\\python.exe。"
                + "必须是 python.exe，不要用 pythonw.exe —— 实测隐藏窗口启动时 pythonw 会立刻 exit 1")]
@@ -58,51 +54,12 @@ namespace PetFramework
             src.spatialBlend = 0f;   // 2D 音频
             if (string.IsNullOrEmpty(rate)) rate = "+8%";      // 场景序列化丢失时兜底
             if (string.IsNullOrEmpty(pitch)) pitch = "+12Hz";
-            if (string.IsNullOrEmpty(volume)) volume = "+0%";
-            LoadConfigFromProfile();
             if (string.IsNullOrEmpty(voice)) voice = "zh-CN-YunxiNeural";
             if (brain == null) brain = FindObjectOfType<PetBrain>();
         }
 
-        [Header("pet_profile.json 里没有 tts_config 时的回退值（小白自己的默认嗓音）")]
-        public string fallbackVoice = "zh-CN-YunxiNeural";
-        public string fallbackRate = "+8%";
-        public string fallbackPitch = "+12Hz";
-        public string fallbackVolume = "+0%";
-
-        [Tooltip("tts_config 的配置文件名（工程根目录 / EXE 同级）")]
-        public string profileFileName = "pet_profile.json";
-
-        /// <summary>每句话前重读 pet_profile.json 的 tts_config；缺项回退到 fallbackXxx。</summary>
-        public void LoadConfigFromProfile()
-        {
-            string path = System.IO.Path.Combine(PetPathUtil.ExeDir(), profileFileName);
-            string nv = null, nr = null, np = null, nvol = null;
-            try
-            {
-                if (System.IO.File.Exists(path))
-                {
-                    var root = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
-                    var c = root["tts_config"] as Newtonsoft.Json.Linq.JObject;
-                    if (c != null)
-                    {
-                        nv = (string)c["voice"];
-                        nr = (string)c["rate"];
-                        np = (string)c["pitch"];
-                        nvol = (string)c["volume"];
-                    }
-                }
-            }
-            catch (System.Exception e) { Debug.LogWarning("[TTS] 读 " + profileFileName + " 失败：" + e.Message); }
-
-            voice = string.IsNullOrEmpty(nv) ? fallbackVoice : nv;
-            rate = string.IsNullOrEmpty(nr) ? fallbackRate : nr;
-            pitch = string.IsNullOrEmpty(np) ? fallbackPitch : np;
-            volume = string.IsNullOrEmpty(nvol) ? fallbackVolume : nvol;
-        }
-
         [System.Serializable]
-        class TTSReq { public string text; public string voice; public string rate; public string pitch; public string volume; }
+        class TTSReq { public string text; public string voice; public string rate; public string pitch; }
 
         // ==================== 启动时确认服务活着，不在就自己拉起来 ====================
 
@@ -271,7 +228,7 @@ namespace PetFramework
 
                 var psi = new System.Diagnostics.ProcessStartInfo();
                 psi.FileName = pythonPath;
-                psi.Arguments = "\"" + serverScript + "\" " + port;
+                psi.Arguments = "\"" + serverScript + "\"";
                 psi.WorkingDirectory = System.IO.Directory.Exists(serverWorkDir)
                     ? serverWorkDir
                     : System.IO.Path.GetDirectoryName(serverScript);
@@ -372,8 +329,7 @@ namespace PetFramework
 
             if (sapiMode) { SpeakSapi(text); yield break; }
 
-            LoadConfigFromProfile();   // ★ 每句话前重读 pet_profile.json（改完不用重启）
-            var req = new TTSReq { text = text, voice = voice, rate = rate, pitch = pitch, volume = volume };
+            var req = new TTSReq { text = text, voice = voice, rate = rate, pitch = pitch };
             byte[] payload = Encoding.UTF8.GetBytes(JsonUtility.ToJson(req));
 
             for (int attempt = 1; attempt <= maxRetry; attempt++)

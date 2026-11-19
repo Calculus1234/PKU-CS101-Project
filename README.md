@@ -27,12 +27,13 @@
 | [`01-chess-engine`](01-chess-engine/) | 暗棋（international chess variant）AI 引擎 | 信念推断、采样期望搜索、αβ+PVS、根节点安全约束 | Unity 实机 + 无头对战脚本 |
 | [`02-poker-solver`](02-poker-solver/) | 斗地主单挑残局解牌器 | 位棋（bitboard）、布尔 negamax、置换表、并行分片 | **`dotnet run --test`，无需 Unity** |
 | [`03-hilbert-loop`](03-hilbert-loop/) | 悬疑推理游戏《大限将至》 | 行为树、状态机、LLM 对话、A* 寻路 | **itch.io 下载游玩** |
-| [`04-desktop-pet`](04-desktop-pet/) | **PetFramework 桌宠通用框架** | 一套框架驱动三个角色；11 个抽象动作；5 种可扩展工具源；配置热更新 | Windows 实机（Release 用 Furina） |
+| [`04-desktop-pet`](04-desktop-pet/) | **DesktopPetFramework 桌宠通用框架** | 同一份代码驱动了**四个角色**（白虎 / 青龙 / 猫 / 芙宁娜）；内置毛发 / 鳞片 / 金属三种渲染接口；工具注册中心 + 3 秒热重载 | Windows 实机（Release 打包芙宁娜） |
 
 > **这一项交的是框架，不是某个具体桌宠。**
-> 同一个 PetFramework 2.0 已经驱动了三只完全不同的角色（白虎「小白」、芙宁娜、青龙）——
-> 换角色只需换模型 + 动画控制器 + 配置文件，**框架代码零改动**。
-> Release 里发布的是 Furina 版本。
+> 同一份框架代码驱动了四个完全不同的角色：白虎「小白」、青龙、猫、芙宁娜。
+> 内置三种渲染接口（毛发 / 鳞片 / 金属），换角色只需换模型 + 动画控制器 + 材质配置，
+> **框架代码零改动**。芙宁娜的完整实现记录（含线上 Qwen 联调）在
+> [`04-desktop-pet/docs/角色实现记录/`](04-desktop-pet/docs/角色实现记录/)。
 
 ### 各项目的详细文档
 
@@ -59,7 +60,8 @@
 
 > **《大限将至》已发布在 itch.io：** https://linzhongxike.itch.io/hilbert-loop
 >
-> 游戏包含 8.6 GB 美术资源，不适合放进 Release；itch.io 也是独立游戏的正式分发渠道。
+> 完整构建 **3.87 GB**，超过 GitHub Release 单文件 2 GB 上限，所以走 itch.io。
+> 游戏内支持本地 AI 模型（默认 1.5B，需 8 GB 内存），无独显时**按 F9 切到云端 API**。
 
 详细说明见 [Release Notes](docs/RELEASE_v1.0.md)。
 
@@ -79,8 +81,8 @@ dotnet run --project src/Cli -- "44 66 10 J QQQ K A 22 大王" "3333 4 555 6 777
 ```
 ✔ 我方必胜
 首手：10
-耗时：8.19 秒
-节点：41,243,835
+耗时：6.38 秒
+节点：41,617,006
 ```
 
 ---
@@ -109,7 +111,7 @@ PKU-CS101-Project/
 │   └── src/Scripts/              自写代码（138 个 .cs）
 └── 04-desktop-pet/
     ├── README.md
-    └── src/                      自写代码（49 个 .cs）
+    └── src/                      框架代码（40 个 .cs，来自 unitypackage 导出）
 ```
 
 **说明：仓库只包含自己写的代码与文档。** 第三方资源（Photon、A* Pathfinding、Unity 官方包、美术素材、构建产物）不在此仓库，原因见各子项目的 README。

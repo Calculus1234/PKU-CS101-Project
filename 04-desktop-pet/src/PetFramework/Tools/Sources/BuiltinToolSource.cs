@@ -42,24 +42,18 @@ namespace PetFramework.Tools
                 {
                     var fn = arr[i]["function"] as JObject;
                     if (fn == null) continue;
-                    string toolName = (string)fn["name"];
                     var d = new ToolDescriptor
                     {
-                        name = toolName,
-                        title = toolName,
+                        name = (string)fn["name"],
+                        title = (string)fn["name"],
                         description = (string)fn["description"],
                         parametersJson = (fn["parameters"] != null) ? fn["parameters"].ToString() : "{\"type\":\"object\",\"properties\":{}}",
                         kind = ToolKind.Builtin,
-                        // ⚠️ look_screen 必须是 Agent：它要把"已抓屏"的结果回传给模型，
-                        //    并且触发下一轮（下一轮才带图片）。其余内置一律 Chat：执行完就结束。
-                        mode = (toolName == "look_screen") ? ToolMode.Agent : ToolMode.Chat,
+                        mode = ToolMode.Chat,          // 内置一律「执行完就结束」，不回传
                         sourceId = SourceId,
                         requireConfirm = false,
                         timeoutSec = 5f
                     };
-                    // ⚠️ 只有 look_screen 是"只读"语义；feed_file 会移文件、move_to 会改位置，
-                    //    别为了省事把内置全标成只读（万一以后给它们打开 requireConfirm 会出事）。
-                    d.readOnly = (toolName == "look_screen");
                     Tools.Add(d);
                 }
             }
@@ -80,9 +74,7 @@ namespace PetFramework.Tools
                 Debug.LogWarning("[BuiltinToolSource] " + tool.name + " 执行失败：" + e.Message);
             }
 
-            var r = tool.name == "look_screen"
-                ? ToolResult.Ok("{\"ok\":true,\"note\":\"最新的屏幕截图已附在下一条消息里，请直接看图片。\"}", said, ToolMode.Agent)
-                : ToolResult.Ok("{\"ok\":true}", said, ToolMode.Chat);
+            var r = ToolResult.Ok("{\"ok\":true}", said, ToolMode.Chat);
             done(r);
             yield break;
         }

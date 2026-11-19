@@ -59,10 +59,6 @@ namespace PetFramework
             // 配置面板开着时别抢按键 —— 用户正在里面打字，按到 T 就弹出聊天框会很烦
             if (PetConfigUI.IsOpen) { if (visible) Hide(); return; }
 
-            // ★ 工作区（F8）开着时也不抢 T：那是工作区的输入框，弹小白的聊天框只会添乱
-            var ws = PetFramework.Workspace.WorkspaceUI.Instance;
-            if (ws != null && ws.IsOpen) { if (visible) Hide(); return; }
-
             if (!visible && (Input.GetKeyDown(toggleKey) || Input.GetKeyDown(KeyCode.T))) Show();
             else if (visible && Input.GetKeyDown(KeyCode.Escape)) Hide();
             if (visible) FollowPet();
@@ -194,20 +190,11 @@ namespace PetFramework
             //   就算调了 move_to / 兜底漫游也只能等面板关掉才动 —— 你会以为它没反应。
             if (brain != null) brain.freezeMove = false;
 
-            // ★ 流式：边收边显示（模型吐字就开始写），第一个字出现得早很多
-            PetAPI.Instance.onStreamDelta = s =>
-            {
-                // 桌面气泡也跟着渲染 Markdown（**粗体**、`代码`、标题…），不然模型一排版就满屏星号
-                if (replyText != null) replyText.text = PetName_ + "：" + PetFramework.MarkdownText.ToRich(s);
-            };
             PetAPI.Instance.Ask(txt, OnReply);
         }
 
         void OnReply(PetReply r)
         {
-            if (PetAPI.Instance != null) PetAPI.Instance.onStreamDelta = null;   // 收尾，别影响下一轮
-            if (r != null && !string.IsNullOrEmpty(r.text))
-                r.text = PetFramework.TextTools.StripToolSyntax(r.text);   // 不留工具调用痕迹
             // ① 空回复才算失败（这是本地 Ollama，跟余额无关）
             if (r == null)
             {
@@ -217,24 +204,13 @@ namespace PetFramework
                 return;
             }
 
-            if (!string.IsNullOrEmpty(r.text) && replyText != null)
-                replyText.text = PetName_ + "：" + PetFramework.MarkdownText.ToRich(r.text);
+            if (!string.IsNullOrEmpty(r.text) && replyText != null) replyText.text = PetName_ + "：" + r.text;
 
             // ② 本轮是【工具】完成的：动作和 TTS 在工具里都做过一遍了，
             //    这里只负责把话显示出来，绝不能重复朗读、也不能报"没收到回复"。
             if (r.viaTool)
             {
                 Debug.Log("[ChatUI] 本轮由工具回应（已朗读）：" + r.text);
-                return;
-            }
-
-            // ②.5 只做了动作、没说话（模型只吐了 look_back / walk 这种）——
-            //     正常执行动作，别给用户显示「没收到回复」。
-            if (string.IsNullOrEmpty(r.text) && !string.IsNullOrEmpty(r.action) &&
-                !string.Equals(r.action, "Idle", System.StringComparison.OrdinalIgnoreCase))
-            {
-                if (brain != null) brain.PlayAction(r.action);
-                Debug.Log("[ChatUI] 只做动作（" + r.action + "），不说话");
                 return;
             }
 

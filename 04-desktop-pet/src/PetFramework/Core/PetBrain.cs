@@ -60,20 +60,6 @@ namespace PetFramework
         public float turnSmoothTime = 0.25f;    // 转身平滑时间（0.2~0.3s 惯性感）
         public float turnWalkSlow = 0.5f;       // 回正段 Walk 动画减速倍率
         public float jumpThreshold = 0.35f;     // 垂直差超过它才起跳（减少跳跃次数）
-
-        [Header("AI 全权操控 / 移动手感")]
-        [Tooltip("开 = 桌宠只听从 AI / 脚本指令，【不会自动追鼠标】；点击、拖拽、摸头仍然有效")]
-        public bool aiControlOnly = true;
-
-        [Tooltip("开 = 斜着走过去（X/Y 同时移动），走兽也不再「先跳再走」；" +
-                 "关 = 恢复成 X 走 + Y 跳的老手感")]
-        public bool diagonalWalk = true;
-
-        [Tooltip("起步平滑时间（秒）。0 = 立刻起步")]
-        public float accelTime = 0.15f;
-        [Tooltip("停下平滑时间（秒）。0 = 立刻停")]
-        public float decelTime = 0.12f;
-        float moveRamp = 0f;                    // 0~1 的速度系数（起步/停下用）
         float moveDirX = 0f;                    // 当前水平移动方向：-1 左 / 0 停 / +1 右
         UnityEngine.Vector2 moveVec = UnityEngine.Vector2.zero;  // 本帧真实运动方向（非四足模式用）
         float curTiltZ, steerVelZ;              // 绕 Z 的倾斜（头朝运动方向）
@@ -87,19 +73,13 @@ namespace PetFramework
         [Header("跳跃与2.5D边界")]
         public float jumpDur = 1f;          // Jump 动画时长（抛物线总时长）
         public float jumpArc = 0.6f;        // 跳跃最高抬升高度
-            public float screenMargin = 0.3f;   // 距屏幕边缘留边（世界单位）
-        [Tooltip("距屏幕边缘留边（像素）——最后一道像素级夹取用")]
-        public float screenMarginPx = 4f;
+            public float screenMargin = 0.3f;   // 距屏幕边缘留边
         [Tooltip("头顶高出脚底多少米。0 = 启动时自动量（推荐）。\n" +
                  "⚠️ 边界夹的是【脚底】，如果不减去这个高度，它走到屏幕最上面时头和上半身会出画。")]
         public float bodyHeightAboveFoot = 0f;
-        [Tooltip("手动指定 身体半宽（米，左右各占一半）。0 = 自动按 Renderer.bounds 量")]
-        public float bodyHalfWidth = 0f;
 
         // 自动测量出来的"头顶高出脚底"距离
         float headAboveFoot = 1.1f;
-        float halfWidth = 0.55f;           // 身体半宽（米）：贴边时整只都留在屏幕内
-        float nextDragLog;
 
         [Header("光标对接（脚底原点 → 身体接光标）")]
         public float bodyOffsetY = 0.7f;    // 身体/头相对脚底的高度：光标对准这个高度，而非脚
@@ -156,9 +136,6 @@ namespace PetFramework
         float planeZ;    // 2D 横板桌宠：锁死屏幕深度(Z)，只在屏幕平面内上下左右移动
         int intent = -1;
         bool dragging, angry;
-        Vector3 dragOffset;                     // 抓住时「宠物 - 光标」的偏移，拖动全程保持
-        /// <summary>正在被拖动（给特效/别的模块判断——比看动画状态可靠）。</summary>
-        public bool IsDragging { get { return dragging; } }
         float lastDown = -99f, angryStart = 0f, hoverEnter = -99f;
         bool armedHover;
         Coroutine singleClick;
@@ -193,25 +170,9 @@ namespace PetFramework
             Log("AI → 走到 (" + scriptedTarget.x.ToString("F2") + ", " + (scriptedTarget.y - bodyOffsetY).ToString("F2") + ")");
         }
 
-        [Header("多形态：由 FormSwitcher 传入当前形态的 Animator")]
-        [Tooltip("留空 = 用本物体上的 Animator（单形态桌宠）。多形态请让 FormSwitcher 在换形态后调 SetAnimator()")]
-        public Animator animatorOverride;
-
-        /// <summary>换形态后调用：把状态机切到新身体的 Animator，并补一次当前状态。</summary>
-        public void SetAnimator(Animator a)
-        {
-            if (a == null || a == anim) return;
-            anim = a;
-            if (intent >= 0)
-            {
-                anim.ResetTrigger(TRIG[intent]);
-                anim.SetTrigger(TRIG[intent]);
-            }
-        }
-
         void Awake()
         {
-            anim = animatorOverride != null ? animatorOverride : GetComponent<Animator>();
+            anim = GetComponent<Animator>();
             cam = Camera.main;
             baseScale = transform.localScale;
             planeZ = 0f;    // 锁定 Z=0（约束）
@@ -232,78 +193,37 @@ namespace PetFramework
             yield return null;
             yield return null;      // 等动画器把初始姿势摆好再量
 
-            var r = GetComponentInChildren<Renderer>(true);
             if (bodyHeightAboveFoot > 0f)      // 手动指定优先
             {
                 headAboveFoot = bodyHeightAboveFoot;
                 Log("体型：用 Inspector 指定的 头顶高出脚底 " + headAboveFoot.ToString("F2") + " 米");
             }
-            else if (r != null)
+            else
             {
-                float top = r.bounds.max.y - transform.position.y;
-                if (top > 0.05f && top < 20f)
+                var r = GetComponentInChildren<Renderer>(true);
+                if (r != null)
                 {
-                    headAboveFoot = top;
-                    Log("体型：自动测得 头顶高出脚底 " + top.ToString("F2")
-                        + " 米（身体底部 " + (transform.position.y - r.bounds.min.y).ToString("F2") + " 米）"
-                        + "　→ 屏幕边界会按这个算，头不会再伸出屏幕上沿");
+                    float top = r.bounds.max.y - transform.position.y;
+                    if (top > 0.05f && top < 20f)
+                    {
+                        headAboveFoot = top;
+                        Log("体型：自动测得 头顶高出脚底 " + top.ToString("F2")
+                            + " 米（身体底部 " + (transform.position.y - r.bounds.min.y).ToString("F2") + " 米）"
+                            + "　→ 屏幕边界会按这个算，头不会再伸出屏幕上沿");
+                        yield break;
+                    }
                 }
-                else Log("体型：量不出来，用默认 " + headAboveFoot.ToString("F2") + " 米");
-            }
-            else Log("体型：量不出来，用默认 " + headAboveFoot.ToString("F2") + " 米");
-
-            // ★ 左右边界同理：夹的是【脚底中心】，不减去半宽的话，身体会有一半探出屏幕左右边缘。
-            if (bodyHalfWidth > 0f)
-            {
-                halfWidth = bodyHalfWidth;
-                Log("体型：用 Inspector 指定的 半宽 " + halfWidth.ToString("F2") + " 米");
-            }
-            else if (r != null)
-            {
-                float ex = r.bounds.extents.x;
-                if (ex > 0.02f && ex < 20f)
-                {
-                    halfWidth = ex;
-                    Log("体型：自动测得 半宽 " + ex.ToString("F2") + " 米　→ 左右边缘不会再被切掉一半");
-                }
+                Log("体型：量不出来，用默认 " + headAboveFoot.ToString("F2") + " 米");
             }
         }
-
-        [Header("排查")]
-        [Tooltip("打开后每帧打印边界数值（排查用；平时关着）")]
-        public bool debugClamp = false;
 
         void Update()
         {
             if (anim == null) return;
-
-            // ★ 拖拽看门狗：窗口重排 / 失去鼠标捕获时 Unity 可能收不到 OnMouseUp，
-            //   dragging 会永久为 true ⇒ 表现是「拖不动了」「拖到一半卡住」。
-            //   每帧核对真实按键，松手就立刻走正常收尾（播 Drop）。
-            if (dragging && !Input.GetMouseButton(0))
-            {
-                Log("⚠️ 没收到 OnMouseUp（按键已松开）→ 看门狗结束拖动");
-                EndDrag();
-            }
-
             moveDirX = 0f;                 // 每帧重置，由移动逻辑写入
             moveVec = UnityEngine.Vector2.zero;
-            // 停下时让速度系数回落（起步/刹车都靠它，避免"啪"地一下开始/结束）
-            moveRamp = Mathf.MoveTowards(moveRamp, 0f, decelTime > 0.001f ? Time.deltaTime / decelTime : 1f);
-            // ★ AI 全权操控：完全不读鼠标位置 —— 目标只来自 AI 的 move_to / wander。
-            //   没人下指令时把目标设成脚下，Dist()=0 ⇒ 自然停在 Idle，不会追着鼠标跑。
-            if (aiControlOnly)
-            {
-                // ⚠️ 这里【不能】加 bodyOffsetY：target 同时被 MoveToward（拖动）当成“落脚点”用，
-                //    多加一个身高偏移会让它在拖动时一直往上飞（用户实测：只能往上动）。
-                target = hasScripted ? scriptedTarget
-                                     : new UnityEngine.Vector3(transform.position.x, transform.position.y, planeZ);
-            }
-            else
-            {
-                UpdateTarget();
-                if (hasScripted) target = scriptedTarget;   // AI 指定的目的地优先于鼠标
-            }
+            UpdateTarget();
+            if (hasScripted) target = scriptedTarget;   // AI 指定的目的地优先于鼠标
             ClampToScreen();
             CheckIdleReport();
             if (freezeMove && !dragging)
@@ -312,28 +232,10 @@ namespace PetFramework
                 return;
             }
 
-            if (dragging)
-            {
-                // ★ 拖动 = 1:1 跟手：直接放到「光标 + 抓取偏移」。
-                //   以前是 MoveTowardPoint(runSpeed≈1.49 m/s) —— 光标一快就追不上，
-                //   手感发涩、像有阻尼（用户实测"特别有阻滞感"）。
-                hasScripted = false;
-                UnityEngine.Vector3 p = MouseGroundPoint() + dragOffset;
-                p.z = planeZ;
-                transform.position = p;
-                ClampToScreen();
-                if (Time.unscaledTime >= nextDragLog)
-                {
-                    nextDragLog = Time.unscaledTime + 0.3f;
-                    Debug.Log("[DragDbg] raw=" + p.ToString("F2") + " clamped=" + transform.position.ToString("F2")
-                        + " cam=" + (cam != null) + " mouse=" + Input.mousePosition.ToString("F0")
-                        + " screen=" + Screen.width + "x" + Screen.height);
-                }
-                return;
-            }
+            if (dragging) { MoveToward(runSpeed); return; }
             if (angry)
             {
-                if (!aiControlOnly) ChaseMove(runSpeed);   // AI 全权操控时不去追鼠标
+                ChaseMove(runSpeed);
                 if (Dist() <= arriveStop || Time.time - angryStart > angryTimeout)
                 { angry = false; Fire(I_IDLE); Log("生气结束 → Idle"); }
                 return;
@@ -367,17 +269,9 @@ namespace PetFramework
             if (wandering) { WanderStep(); if (Time.time >= wanderUntil) StopWander(); }
             else
             {
-                if (aiControlOnly)
-                {
-                    // 没人下指令 ⇒ 安静待机（不追鼠标）
-                    if (!IsOneShotIntent()) Fire(I_IDLE);
-                }
-                else
-                {
-                    float d = Dist();
-                    if (d > arriveStop && d <= chaseRange) ChaseMove(walkSpeed);   // 仅光标接近才追
-                    else if (!IsOneShotIntent()) Fire(I_IDLE);
-                }
+                float d = Dist();
+                if (d > arriveStop && d <= chaseRange) ChaseMove(walkSpeed);   // 仅光标接近才追
+                else if (!IsOneShotIntent()) Fire(I_IDLE);
             }
         }
 
@@ -457,14 +351,6 @@ namespace PetFramework
             if (Time.time - lastDown <= doubleClickWindow)
             {
                 if (singleClick != null) { StopCoroutine(singleClick); singleClick = null; }
-                // ⚠️ AI 全权操控模式（aiControlOnly）下它【不追鼠标】。
-                //    再播 Run 就变成"原地跑步"——用户明确要求：这种情况下不许放跑步动画。
-                if (aiControlOnly)
-                {
-                    Fire(I_PET);
-                    Log("双击 → 摸摸（AI 模式下不播 Run）");
-                    return;
-                }
                 angry = true; angryStart = Time.time;
                 Fire(I_RUN);
                 Log("双击 → Run 生气追击");
@@ -479,41 +365,12 @@ namespace PetFramework
         {
             if (angry) return; // 生气中不拖
             Touch();
-            if (!dragging)
-            {
-                dragging = true;
-                // 记下「宠物 - 光标」的偏移：拖起来不会"啪"地吸到光标中心
-                dragOffset = transform.position - MouseGroundPoint();
-                dragOffset.z = 0f;
-                Fire(I_DRAG);
-                Log("按住 → Drag");
-            }
+            if (!dragging) { dragging = true; Fire(I_DRAG); Log("按住 → Drag"); }
         }
 
         void OnMouseUp()
         {
-            if (dragging) EndDrag();
-        }
-
-        /// <summary>结束拖动（OnMouseUp 和看门狗共用）。</summary>
-        void EndDrag()
-        {
-            if (!dragging) return;
-            dragging = false;
-            var rend = GetComponentInChildren<Renderer>(true);
-            string bs = "-";
-            if (rend != null)
-            {
-                var b = rend.bounds;
-                Vector3 s0 = cam != null ? cam.WorldToScreenPoint(new Vector3(b.min.x, b.min.y, 0f)) : Vector3.zero;
-                Vector3 s1 = cam != null ? cam.WorldToScreenPoint(new Vector3(b.max.x, b.max.y, 0f)) : Vector3.zero;
-                bs = "boundsX[" + b.min.x.ToString("F2") + "," + b.max.x.ToString("F2") + "]"
-                   + " boundsY[" + b.min.y.ToString("F2") + "," + b.max.y.ToString("F2") + "]"
-                   + " screenRect[" + s0.x.ToString("F0") + "," + s0.y.ToString("F0") + ".." + s1.x.ToString("F0") + "," + s1.y.ToString("F0") + "]";
-            }
-            Debug.Log("[DragEnd] pos=" + transform.position.ToString("F2") + " cam=" + (cam != null) + " " + bs);
-            Fire(I_DROP);
-            Log("松开 → Drop（播完回 Idle）");
+            if (dragging) { dragging = false; Fire(I_DROP); Log("松开 → Drop（播完回 Idle）"); }
         }
 
         void OnMouseEnter() { Touch(); armedHover = true; hoverEnter = Time.time; TransparentWindow.mouseOverPet = true; }
@@ -608,16 +465,11 @@ namespace PetFramework
             UnityEngine.Vector3 d = target - body; d.z = 0f; return d.magnitude;
         }
 
-        void MoveToward(float speed) { MoveTowardPoint(target, speed); }
-
-        /// <summary>朝某个“落脚点”移动（脚底坐标，和 transform.position 同一套）。</summary>
-        void MoveTowardPoint(UnityEngine.Vector3 point, float speed)
+        void MoveToward(float speed)
         {
-            float dx = point.x - transform.position.x;
-            if (Mathf.Abs(dx) > 1e-3f) moveDirX = dx >= 0f ? 1f : -1f;
+            FaceTarget();
             UnityEngine.Vector3 from = transform.position; from.z = planeZ;
-            point.z = planeZ;
-            transform.position = UnityEngine.Vector3.MoveTowards(from, point, speed * speedTune * Time.deltaTime);
+            transform.position = UnityEngine.Vector3.MoveTowards(from, target, speed * speedTune * Time.deltaTime);
             transform.position = new UnityEngine.Vector3(transform.position.x, transform.position.y, planeZ);
         }
         void FaceTarget()
@@ -635,11 +487,9 @@ namespace PetFramework
         /// 否则 Y 差落在 (arriveStop, jumpThreshold] 之间时会永远差一点、到不了、卡死不动。</summary>
         void ChaseMove(float speed, float yThresh)
         {
-            // ───── 斜线移动（X/Y 同时走）─────
-            //   ① 非四足（龙/蛇/鱼）本来就是斜着游；
-            //   ② 四足开了 diagonalWalk（默认）也斜着走 ——
-            //      不再"Y 差 → 起跳 → 落地 → X 走"，而是朝目标直线走过去。
-            if (turnMode != PetTurnMode.Yaw3D || diagonalWalk)
+            // ───── 非四足（龙 / 蛇 / 鱼）：【不跳】，X/Y 同时朝目标直线游过去 ─────
+            //  四足生物上台阶才需要"跳"；龙是浮游的，想去上面直接游上去就行。
+            if (turnMode != PetTurnMode.Yaw3D)
             {
                 float gx = target.x;
                 float gy = target.y - bodyOffsetY;
@@ -651,11 +501,8 @@ namespace PetFramework
                 moveDirX = dir.x >= 0f ? 1f : -1f;
                 moveVec = dir;                       // 给 LateUpdate 做"头朝运动方向"
                 Fire(I_WALK);
-                // 起步渐进：0 → 1，accelTime 秒内加满
-                moveRamp = Mathf.MoveTowards(moveRamp, 1f,
-                    accelTime > 0.001f ? Time.deltaTime / accelTime : 1f);
                 transform.position += new UnityEngine.Vector3(dir.x, dir.y, 0f)
-                                      * speed * speedTune * moveRamp * Time.deltaTime;
+                                      * speed * speedTune * Time.deltaTime;
                 return;
             }
 
@@ -709,74 +556,10 @@ namespace PetFramework
             float hiY = maxY - screenMargin - bodyTop;
             if (hiY < loY) hiY = loY;          // 屏幕矮得离谱时别把上下界搞反
 
-            // ★ 左右也要减去身体半宽，否则贴着屏幕边时会被切掉一半（作者实测：小白半边身子出屏）。
-            float halfW = bodyHalfWidth > 0f ? bodyHalfWidth : halfWidth;
-            float loX = minX + screenMargin + halfW;
-            float hiX = maxX - screenMargin - halfW;
-            if (hiX < loX) hiX = loX;
-
-            if (debugClamp)
-            {
-                Debug.Log("[ClampDbg] worldX[" + (minX + screenMargin).ToString("F2") + "," + (maxX - screenMargin).ToString("F2")
-                    + "] worldY[" + (minY + screenMargin).ToString("F2") + "," + (maxY - screenMargin).ToString("F2")
-                    + "] halfW=" + halfWidth.ToString("F2") + " bodyTop=" + headAboveFoot.ToString("F2")
-                    + " cam=" + (cam != null));
-            }
-
             UnityEngine.Vector3 p = transform.position;
-            p.x = Mathf.Clamp(p.x, loX, hiX);
+            p.x = Mathf.Clamp(p.x, minX + screenMargin, maxX - screenMargin);
             p.y = Mathf.Clamp(p.y, loY, hiY);
             transform.position = p;
-
-            // ★ 二次保险：按【当前动画姿势的真实包围盒】再推一次。
-            //   半宽是按 Idle 量的；走路/跳跃时手臂尾巴伸得更远，光靠 center+halfWidth 还会露出去。
-            var rend = GetComponentInChildren<Renderer>(true);
-            if (rend != null)
-            {
-                UnityEngine.Bounds b = rend.bounds;
-                float dx = 0f, dy = 0f;
-                float edgeL = minX + screenMargin, edgeR = maxX - screenMargin;
-                float edgeB = minY + screenMargin, edgeT = maxY - screenMargin;
-                if (b.max.x > edgeR) dx = edgeR - b.max.x;
-                else if (b.min.x < edgeL) dx = edgeL - b.min.x;
-                if (b.max.y > edgeT) dy = edgeT - b.max.y;
-                else if (b.min.y < edgeB) dy = edgeB - b.min.y;
-                if (dx != 0f || dy != 0f)
-                    transform.position += new UnityEngine.Vector3(dx, dy, 0f);
-
-                if (debugClamp)
-                    Debug.Log("[ClampDbg] bounds[" + b.min.x.ToString("F2") + "," + b.max.x.ToString("F2")
-                        + "]x[" + b.min.y.ToString("F2") + "," + b.max.y.ToString("F2")
-                        + "] dx=" + dx.ToString("F2") + " dy=" + dy.ToString("F2")
-                        + " pos=" + transform.position.ToString("F2"));
-
-                // ★ 第三道（像素级保险）：不依赖 viewport/世界边界的换算，
-                //   直接把当前姿势的包围盒投到【屏幕像素】上，超出就按像素差推回来。
-                //   只要窗口真的盖住屏幕，这一道就能保证"整只都在屏幕里"。
-                // ⚠️ 上面按世界包围盒推过一次，这里必须拿【推完之后的】bounds，
-                //    否则会用旧数据二次修正，把宠物往回弹一截。
-                Bounds bb = rend.bounds;
-                Vector3 bmin = cam.WorldToScreenPoint(new Vector3(bb.min.x, bb.min.y, planeZ));
-                Vector3 bmax = cam.WorldToScreenPoint(new Vector3(bb.max.x, bb.max.y, planeZ));
-                float loPX = screenMarginPx, hiPX = Screen.width - screenMarginPx;
-                float loPY = screenMarginPx, hiPY = Screen.height - screenMarginPx;
-                float dpx = 0f, dpy = 0f;
-                if (bmax.x > hiPX) dpx = hiPX - bmax.x;
-                else if (bmin.x < loPX) dpx = loPX - bmin.x;
-                if (bmax.y > hiPY) dpy = hiPY - bmax.y;
-                else if (bmin.y < loPY) dpy = loPY - bmin.y;
-                if (dpx != 0f || dpy != 0f)
-                {
-                    float wpx = Screen.width > 1 ? (Screen.width - 1f) : 1f;
-                    float hpx = Screen.height > 1 ? (Screen.height - 1f) : 1f;
-                    float wScale = (maxX - minX) / wpx;    // 世界单位 / 像素
-                    float hScale = (maxY - minY) / hpx;
-                    transform.position += new Vector3(dpx * wScale, dpy * hScale, 0f);
-                    if (debugClamp)
-                        Debug.Log("[ClampDbg] 像素修正 dpx=" + dpx.ToString("F1") + " dpy=" + dpy.ToString("F1")
-                            + " → pos=" + transform.position.ToString("F2"));
-                }
-            }
         }
         UnityEngine.Vector3 RayFor(UnityEngine.Ray r)
         {

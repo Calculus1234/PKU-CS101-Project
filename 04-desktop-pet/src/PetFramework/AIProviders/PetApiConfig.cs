@@ -38,9 +38,6 @@ namespace PetFramework
         public string baseUrl = "http://localhost:11434";
         public string model = "qwen3.5:4b";
         public string apiKey = "";
-        [Tooltip("可选：聊天接口路径。留空 = 按协议自动补（OpenAI 是 /v1/chat/completions，Ollama 是 /api/chat）。" +
-                 "本地推理服务路径不一样时填这里，例如 /v1/chat/completions")]
-        public string chatPath = "";
         [Tooltip("模型思考开关：开 = 更聪明但更慢；关 = 快，适合 4B 小模型。落盘在 config.json")]
         public bool enableThinking = false;
 
@@ -96,7 +93,6 @@ namespace PetFramework
                 baseUrl = defaultBaseUrl;
                 model = defaultModel;
                 apiKey = defaultApiKey;
-                chatPath = "";
                 enableThinking = defaultEnableThinking;
                 Status = "没有配置文件，用场景默认值";
                 Debug.Log("[PetApiConfig] " + Status + "（将生成模板 " + SettingsPath + "）");
@@ -116,15 +112,12 @@ namespace PetFramework
                 baseUrl = Pick(d, "baseUrl", "BaseUrl", defaultBaseUrl);
                 model = Pick(d, "model", "Model", defaultModel);
                 apiKey = Pick(d, "apiKey", "ApiKey", defaultApiKey);
-                // 本地推理服务（ONW / vLLM / LM Studio …）的聊天路径可能不是标准的 /v1/chat/completions
-                chatPath = Pick(d, "chatPath", "endpoint", "");
                 enableThinking = PickBool(d, "enableThinking", "EnableThinking", defaultEnableThinking);
 
                 try { lastWriteTicks = File.GetLastWriteTimeUtc(SettingsPath).ToFileTimeUtc(); } catch { }
                 Status = "已读取 " + SettingsPath;
                 Debug.Log("[PetApiConfig] ★ " + Status + " | 协议=" + provider + " 模型=" + model
-                          + " 端点=" + baseUrl + (string.IsNullOrEmpty(chatPath) ? "" : chatPath)
-                          + " Key=" + (string.IsNullOrEmpty(apiKey) ? "无" : "有")
+                          + " 端点=" + baseUrl + " Key=" + (string.IsNullOrEmpty(apiKey) ? "无" : "有")
                           + " 思考=" + (enableThinking ? "开" : "关"));
             }
             catch (System.Exception e)
@@ -158,15 +151,7 @@ namespace PetFramework
         {
             if (string.IsNullOrEmpty(s)) return def;
             s = s.Trim().ToLowerInvariant();
-            // OpenAI 兼容（云端 + 本地推理服务）：
-            //   openai / 云端 / 硅基流动 …；onw（NPU 推理服务）/ vllm / lmstudio / llama.cpp / ollama-openai …
-            // 这些服务说的都是 OpenAI 协议，只是地址不同 —— 不能因为不认识就掉回 Ollama，
-            // 否则会去请求 /api/chat 直接 404（"改了配置没反应"就是这么来的）。
-            if (s.StartsWith("openai") || s == "1" || s == "cloud" || s == "云端"
-                || s == "onw" || s == "npu" || s == "vllm" || s == "lmstudio" || s == "lm-studio"
-                || s == "llama.cpp" || s == "llamacpp" || s == "oai" || s == "openai-compatible"
-                || s == "openai兼容" || s == "兼容" || s == "sglang" || s == "xinference")
-                return PetApiProvider.OpenAI;
+            if (s.StartsWith("openai") || s == "1" || s == "cloud" || s == "云端") return PetApiProvider.OpenAI;
             if (s.StartsWith("ollama") || s == "0" || s == "local" || s == "本地") return PetApiProvider.Ollama;
             return def;
         }
@@ -191,13 +176,11 @@ namespace PetFramework
                 var sb = new StringBuilder();
                 sb.Append("{\n");
                 sb.Append("  \"_readme\": \"桌宠的接口配置。改完保存这个文件、重启即生效；也可以按 Esc 在游戏里改。\",\n");
-                sb.Append("  \"_provider_说明\": \"ollama = 本地 Ollama；openai = OpenAI 兼容（云端硅基流动 / 本地 ONW、vLLM、LM Studio 等）\",\n");
+                sb.Append("  \"_provider_说明\": \"ollama = 本地；openai = 云端(硅基流动/DeepSeek/通义等)\",\n");
                 sb.Append("  \"provider\": \"").Append(provider == PetApiProvider.OpenAI ? "openai" : "ollama").Append("\",\n");
                 sb.Append("  \"baseUrl\": \"").Append(JsonEsc(baseUrl)).Append("\",\n");
                 sb.Append("  \"model\": \"").Append(JsonEsc(model)).Append("\",\n");
                 sb.Append("  \"apiKey\": \"").Append(JsonEsc(apiKey)).Append("\",\n");
-                sb.Append("  \"_chatPath_说明\": \"留空 = 自动（OpenAI 补 /v1/chat/completions，Ollama 补 /api/chat）；服务路径不同时手填\",\n");
-                sb.Append("  \"chatPath\": \"").Append(JsonEsc(chatPath)).Append("\",\n");
                 sb.Append("  \"_enableThinking_说明\": \"true = 让模型先思考再回答（更聪明但慢，本地 4B 会 60 秒+）；false = 直接答（快）\",\n");
                 sb.Append("  \"enableThinking\": ").Append(enableThinking ? "true" : "false").Append("\n");
                 sb.Append("}\n");
@@ -239,7 +222,6 @@ namespace PetFramework
             api.baseUrl = baseUrl;
             api.model = model;
             api.apiKey = apiKey;
-            api.chatPath = chatPath;
             api.disableThinking = !enableThinking;   // 面板上是「启用思考」，PetAPI 里是反向的开关
 
             Debug.Log("[PetApiConfig] 已套用到 PetAPI → " + api.provider + " " + api.Endpoint()
@@ -256,7 +238,6 @@ namespace PetFramework
             baseUrl = api.baseUrl;
             model = api.model;
             apiKey = api.apiKey;
-            chatPath = api.chatPath ?? "";
             enableThinking = !api.disableThinking;
         }
 

@@ -20,35 +20,7 @@ namespace PetFramework
         [Header("追光标判定范围（按屏幕高度比例，分辨率无关）")]
         public float chaseScreenFraction = 0.35f;   // 光标进入屏高 35% 内就去追（越大越敏感）
 
-        /// <summary>玩家在面板里调过的大小（%）。没有记录就用 Inspector 的默认值。</summary>
-        public const string SizePrefKey = "Pet_ScreenHeightPercent";
-
-        /// <summary>当前占屏高百分比（0~100）。面板滑杆直接绑这个。</summary>
-        public float ScreenPercent
-        {
-            get { return petScreenHeightFraction * 100f; }
-        }
-
-        /// <summary>面板滑杆调大小：设置 → 立刻重算取景 → 记住（下次启动还用这个值）。</summary>
-        public void SetScreenPercent(float percent, bool save = true)
-        {
-            petScreenHeightFraction = Mathf.Clamp(percent, 3f, 60f) / 100f;
-            Apply();
-            if (save)
-            {
-                PlayerPrefs.SetFloat(SizePrefKey, ScreenPercent);
-                PlayerPrefs.Save();
-            }
-            Debug.Log("[PetCameraFraming] 大小 = " + ScreenPercent.ToString("0.0") + "% 屏高");
-        }
-
-        void Start()
-        {
-            // 玩家调过就以他调的为准；没调过用 Inspector 的默认值
-            if (PlayerPrefs.HasKey(SizePrefKey))
-                petScreenHeightFraction = Mathf.Clamp(PlayerPrefs.GetFloat(SizePrefKey, ScreenPercent), 3f, 60f) / 100f;
-            Apply();
-        }
+        void Start() { Apply(); }
 
         /// <summary>按当前参数摆好相机并把速度换算到 PetBrain。
         /// 抽成公开方法是因为【取景只在 Start 算一次】—— 从 fur_settings.txt 改了

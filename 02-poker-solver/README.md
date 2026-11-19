@@ -284,7 +284,10 @@ dotnet run --project src/Cli -- --test
 
 ## 功能展示
 
-> 截图放在 `docs/screenshots/`，请自行补充 PC / Android 的实际运行截图。
+> PC 端实际运行截图见仓库根目录
+> [`docs/screenshots/`](../docs/screenshots/)：`poker-main.png`（主界面）、
+> `poker-result.png`（无解判定 + 局面特征）、`poker-sim.png`（模拟对抗标注对方制胜首手）。
+> （Android 端的候选走法分页 UI 需要另拍。）
 
 ### 图形界面要点
 

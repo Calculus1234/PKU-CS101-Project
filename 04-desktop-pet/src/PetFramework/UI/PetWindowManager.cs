@@ -78,13 +78,7 @@ namespace PetFramework
 
         void Update()
         {
-            // ⚠️ 只有面板【开着】的时候才需要让 Tab 给输入框。
-            //    否则开局 EventSystem 里默认选着 InputField，IsTyping 永远是 true，
-            //    Tab 被永久跳过 —— 表现就是「怎么按都打不开面板」。
-            bool typing = dashboard != null && dashboard.IsOpen && dashboard.IsTyping;
-            // 工作区（F8）也在输入时，Tab 归它
-            var ws = PetFramework.Workspace.WorkspaceUI.Instance;
-            if (ws != null && ws.IsTyping) typing = true;
+            bool typing = dashboard != null && dashboard.IsTyping;
 
             for (int i = 0; i < toggleKeys.Length; i++)
             {
@@ -176,15 +170,9 @@ namespace PetFramework
             var rs = petRoot.GetComponentsInChildren<Renderer>(true);
             for (int i = 0; i < rs.Length; i++) if (rs[i] != null) rs[i].enabled = show;
 
-            // 粒子/拖尾也跟着隐藏，不然只剩特效飘着。
-            // ⚠️ World 模拟的粒子是"已经吐出去、归世界管"的 —— 作者要求它们自己飘完自然消失，
-            //    这里只清 Local 的（那种才会跟着被隐藏的宠物一起挂住）。
+            // 粒子/拖尾也跟着隐藏，不然只剩特效飘着
             var ps = petRoot.GetComponentsInChildren<ParticleSystem>(true);
-            for (int i = 0; i < ps.Length; i++)
-            {
-                if (ps[i] == null) continue;
-                if (ps[i].main.simulationSpace != ParticleSystemSimulationSpace.World) ps[i].Clear();
-            }
+            for (int i = 0; i < ps.Length; i++) if (ps[i] != null) ps[i].Clear();
         }
 
         // ---------------- 给 TransparentWindow 的穿透判据 ----------------

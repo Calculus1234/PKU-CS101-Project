@@ -47,11 +47,7 @@ namespace PetFramework.Tools
         public McpStdioSource(JObject entry, string prefix, float timeoutSec, int maxChars, bool confirm, string[] roots)
         {
             cfg = entry;
-            // 每个 MCP 服务可以用 "prefix" 单独覆盖默认前缀。
-            // ★ 为什么必须加前缀：不加的话 Blender 的 look 在模型眼里就叫「look」，
-            //   4B 模型想"看一眼屏幕"时就会误挑它（作者实测踩过）。
-            //   加上之后是 blender_look / unity_manage_scene，语义一眼就清楚。
-            this.prefix = (string)entry["prefix"] ?? (prefix ?? "");
+            this.prefix = prefix ?? "";
             this.defTimeout = timeoutSec;
             this.defMaxChars = maxChars;
             this.defConfirm = confirm;
@@ -182,41 +178,13 @@ namespace PetFramework.Tools
             Tools.Clear();
             originalName.Clear();
 
-            bool ok = false;
-            for (int attempt = 1; attempt <= 2 && !ok; attempt++)
+            if (!StartProcess())
             {
-                if (!StartProcess())
-                {
-                    Debug.LogWarning("[McpStdioSource] " + _name + " 启动失败（第 " + attempt + " 次）");
-                    yield return new WaitForSecondsRealtime(1.5f);
-                    continue;
-                }
-                yield return Handshake(r => ok = r);
-                if (!ok)
-                {
-                    Debug.LogWarning("[McpStdioSource] " + _name + " 握手失败（第 " + attempt + " 次），重启重试…");
-                    Shutdown();
-                    yield return new WaitForSecondsRealtime(2f);
-                }
-            }
-
-            if (ok)
-            {
-                SaveCache();
-                Debug.Log("[McpStdioSource] ★ " + _name + " 注册了 " + Tools.Count + " 个工具");
+                Debug.LogWarning("[McpStdioSource] " + _name + " 没起来，跳过");
                 yield break;
             }
 
-            if (LoadCache())
-                Debug.LogWarning("[McpStdioSource] ⚠ " + _name + " 连不上，先用缓存的 " + Tools.Count + " 个工具（可能不是最新）");
-            else
-                Debug.LogWarning("[McpStdioSource] ✗ " + _name + " 加载失败，且没有缓存");
-        }
-
-        /// <summary>握手 + 拉工具清单。成功返回 true（工具已填进 Tools）。</summary>
-        IEnumerator Handshake(Action<bool> done)
-        {
-            // ① initialize（uvx 冷启动可能要几十秒，给足 60s）
+            // ① initialize
             int id1 = nextId++;
             var init = new JObject();
             init["jsonrpc"] = "2.0";
@@ -231,8 +199,12 @@ namespace PetFramework.Tools
             Send(init);
 
             JObject resp = null;
-            yield return WaitResponse(id1, 60f, r => resp = r);
-            if (resp == null) { done(false); yield break; }
+            yield return WaitResponse(id1, 15f, r => resp = r);
+            if (resp == null)
+            {
+                Debug.LogWarning("[McpStdioSource] " + _name + " initialize 超时");
+                yield break;
+            }
 
             // ② notifications/initialized（没有 id，不需要等）
             var ready = new JObject();
@@ -252,26 +224,20 @@ namespace PetFramework.Tools
             Send(list);
 
             JObject listResp = null;
-            yield return WaitResponse(id2, 45f, r => listResp = r);
+            yield return WaitResponse(id2, 15f, r => listResp = r);
             if (listResp == null)
             {
                 Debug.LogWarning("[McpStdioSource] " + _name + " tools/list 超时");
-                done(false); yield break;
+                yield break;
             }
 
             var toolsArr = listResp["result"] != null ? listResp["result"]["tools"] as JArray : null;
             if (toolsArr == null)
             {
                 Debug.LogWarning("[McpStdioSource] " + _name + " 没有返回工具清单：" + ToolExecutor.Truncate(listResp.ToString(Formatting.None), 300));
-                done(false); yield break;
+                yield break;
             }
 
-            BuildTools(toolsArr);
-            done(Tools.Count > 0);
-        }
-
-        void BuildTools(JArray toolsArr)
-        {
             for (int i = 0; i < toolsArr.Count; i++)
             {
                 var t = toolsArr[i] as JObject;
@@ -286,14 +252,7 @@ namespace PetFramework.Tools
                 var d = new ToolDescriptor();
                 d.name = exposed;
                 d.title = (string)t["title"] ?? orig;
-
-                // ★ 描述前面标清楚来源：不加的话，Blender 的 look 写成
-                //   "See the scene as one image"，4B 模型会当成"看一眼主人的屏幕"。
-                string srcLabel = (string)cfg["title"];
-                if (string.IsNullOrEmpty(srcLabel)) srcLabel = _name;
-                d.description = "[" + srcLabel + " 工具·不是对方的电脑桌面] "
-                                + ((string)t["description"] ?? "");
-
+                d.description = (string)t["description"] ?? "";
                 d.parametersJson = t["inputSchema"] != null
                     ? t["inputSchema"].ToString(Formatting.None)
                     : "{\"type\":\"object\",\"properties\":{}}";
@@ -302,109 +261,13 @@ namespace PetFramework.Tools
                 d.sourceId = SourceId;
                 d.timeoutSec = cfg.Value<float?>("timeoutSec") ?? defTimeout;
                 d.maxOutputChars = cfg.Value<int?>("maxOutputChars") ?? defMaxChars;
-
-                // ---- 只读判定（三条来源，任一命中即可）----
-                bool readOnly = false;
-                // ① MCP 官方注解
-                var ann = t["annotations"] as JObject;
-                if (ann != null && (ann.Value<bool?>("readOnlyHint") ?? false)) readOnly = true;
-                // ② 配置里显式列出的只读工具（原始名）
-                var roList = cfg["readOnlyTools"] as JArray;
-                if (!readOnly && roList != null)
-                {
-                    for (int k = 0; k < roList.Count; k++)
-                        if ((string)roList[k] == orig) { readOnly = true; break; }
-                }
-                // ③ 名字启发式（look / get_* / list_* / read_* / find_* / search_* …）
-                if (!readOnly && IsReadOnlyName(orig)) readOnly = true;
-                d.readOnly = readOnly;
-
-                // 只读工具不弹窗；修改类照旧按配置询问
-                bool req = cfg.Value<bool?>("requireConfirm") ?? defConfirm;
-                d.requireConfirm = req && !readOnly;
-
+                d.requireConfirm = cfg.Value<bool?>("requireConfirm") ?? defConfirm;
                 d.enabled = true;
                 d.safety.allowedRoots = defRoots;
                 Tools.Add(d);
             }
-        }
 
-        /// <summary>
-        /// 名字启发式：只读工具不弹窗。
-        /// ⚠️ 只做前缀/精确匹配，别用 Contains —— 否则 "create_look" 这种也会被误判。
-        /// </summary>
-        static bool IsReadOnlyName(string n)
-        {
-            if (string.IsNullOrEmpty(n)) return false;
-            string s = n.ToLowerInvariant();
-
-            // 精确名
-            if (s == "look" || s == "status" || s == "info" || s == "ping" ||
-                s == "stats" || s == "screenshot" || s == "list") return true;
-
-            // 前缀名
-            string[] prefixes =
-            {
-                "get_", "list_", "read_", "find_", "search_", "query_",
-                "describe_", "preview_", "count_", "inspect_"
-            };
-            for (int i = 0; i < prefixes.Length; i++)
-                if (s.StartsWith(prefixes[i], StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
-        }
-
-        string CachePath
-        {
-            get
-            {
-                string dir = System.IO.Path.Combine(PetPathUtil.ExeDir(), "Data");
-                try { if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir); } catch { }
-                string safe = _name;
-                foreach (char c in System.IO.Path.GetInvalidFileNameChars()) safe = safe.Replace(c, '_');
-                return System.IO.Path.Combine(dir, "mcp_cache_" + safe + ".json");
-            }
-        }
-
-        void SaveCache()
-        {
-            try
-            {
-                var arr = new JArray();
-                for (int i = 0; i < Tools.Count; i++)
-                {
-                    var d = Tools[i];
-                    var o = new JObject();
-                    o["name"] = originalName.ContainsKey(d.name) ? originalName[d.name] : d.name;
-                    o["title"] = d.title;
-                    o["description"] = d.description;
-                    o["inputSchema"] = JObject.Parse(string.IsNullOrEmpty(d.parametersJson) ? "{}" : d.parametersJson);
-                    arr.Add(o);
-                }
-                var root = new JObject();
-                root["saved"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-                root["tools"] = arr;
-                System.IO.File.WriteAllText(CachePath, root.ToString(Formatting.Indented));
-            }
-            catch (Exception e) { Debug.LogWarning("[McpStdioSource] 写缓存失败：" + e.Message); }
-        }
-
-        bool LoadCache()
-        {
-            try
-            {
-                if (!System.IO.File.Exists(CachePath)) return false;
-                var root = JObject.Parse(System.IO.File.ReadAllText(CachePath));
-                var arr = root["tools"] as JArray;
-                if (arr == null || arr.Count == 0) return false;
-                BuildTools(arr);
-                Debug.Log("[McpStdioSource] " + _name + " 使用缓存（" + (string)root["saved"] + "）");
-                return Tools.Count > 0;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[McpStdioSource] 读缓存失败：" + e.Message);
-                return false;
-            }
+            Debug.Log("[McpStdioSource] ★ " + _name + " 注册了 " + Tools.Count + " 个工具");
         }
 
         // ---------------- 调用 ----------------
@@ -493,9 +356,6 @@ namespace PetFramework.Tools
             if (string.IsNullOrEmpty(res.display)) res.display = "（完成）";
             done(res);
         }
-
-        /// <summary>外部（工作区重载）关掉这个服务。</summary>
-        public void Stop() { Shutdown(); }
 
         void Shutdown()
         {

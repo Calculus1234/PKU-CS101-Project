@@ -11,8 +11,7 @@ namespace PetFramework.Tools
         Builtin,   // 框架自带（走动/说话/记忆…）
         Process,   // 本地可执行文件 / 脚本
         Http,      // HTTP POST
-        Mcp,       // MCP Server（stdio JSON-RPC）
-        Action     // 角色自己的动作池（doDance / doSit …）：不是内置，但同样是 Chat 模式
+        Mcp        // MCP Server（stdio JSON-RPC）
     }
 
     /// <summary>
@@ -61,13 +60,6 @@ namespace PetFramework.Tools
         /// </summary>
         public bool isEnabled = true;
         public bool requireConfirm;
-        /// <summary>
-        /// 只读工具：看一眼、列一下、查一下，不改变任何东西。
-        /// 这类工具即使 requireConfirm=true 也不弹窗（`ToolExecutor.Confirm` 直接放行），
-        /// 否则桌宠想"看一眼屏幕/场景"都要主人点一次允许，根本没法用。
-        /// 判定来源：MCP annotations.readOnlyHint / 配置 readOnlyTools / 工具名启发式。
-        /// </summary>
-        public bool readOnly;
         public ToolSafety safety = new ToolSafety();
 
         public string Readable()

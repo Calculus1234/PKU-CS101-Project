@@ -35,13 +35,6 @@ namespace PetFramework.Tools
         [Tooltip("默认 2 轮，强制夹在 1~3 之间。超了就掐断让模型直接总结")]
         public int maxToolRounds = 2;
 
-        [Header("扩展来源")]
-        [Tooltip("关掉框架自带的桌宠工具（走动/说话/喂文件）——角色用自己的动作池时关掉它")]
-        public bool useBuiltinTools = true;
-
-        [Tooltip("额外的工具来源（实现 IToolSource 的组件），会追加到注册表里")]
-        public MonoBehaviour[] customSources = new MonoBehaviour[0];
-
         public string SettingsPath { get; private set; }
         /// <summary>用户权限文件（每个工具的开/关）。</summary>
         public string PermissionsPath { get; private set; }
@@ -106,32 +99,10 @@ namespace PetFramework.Tools
             sources.Clear();
             ExternalEnabled = false;
 
-            // 内置（桌宠那套：走动/说话/喂文件）
-            if (useBuiltinTools)
-            {
-                var builtin = new BuiltinToolSource();
-                yield return builtin.Initialize(this);
-                sources.Add(builtin);
-            }
-
-            // 内置文件工具（read_file / list_dir / write_file）—— 不依赖 pet_tools.json
-            {
-                var files = new FileToolSource();
-                yield return files.Initialize(this);
-                sources.Add(files);
-            }
-
-            // 扩展来源（比如角色自己的 do* 动作池）
-            if (customSources != null)
-            {
-                for (int i = 0; i < customSources.Length; i++)
-                {
-                    var src = customSources[i] as IToolSource;
-                    if (src == null) continue;
-                    yield return src.Initialize(this);
-                    sources.Add(src);
-                }
-            }
+            // 内置永远有
+            var builtin = new BuiltinToolSource();
+            yield return builtin.Initialize(this);
+            sources.Add(builtin);
 
             // 外部（默认关）
             JObject root = null;
@@ -219,20 +190,6 @@ namespace PetFramework.Tools
             Status = All.Count + " 个工具（内置 " + (All.Count - ext) + " + 外部 " + ext + "），已启用 " + on
                    + (ExternalEnabled ? "" : "　⚠ 外部工具总闸关闭");
             Debug.Log("[ToolRegistry] ★ " + Status + " ← " + SettingsPath);
-
-            // 把实际注册到的工具名打出来（含前缀 / 只读标记）：
-            // 排查"模型挑错工具""为什么还弹确认"时，这一行最省事。
-            var names = new StringBuilder();
-            for (int i = 0; i < All.Count; i++)
-            {
-                var d = All[i];
-                if (d == null || !d.isEnabled) continue;
-                if (names.Length > 0) names.Append(", ");
-                names.Append(d.name);
-                if (d.readOnly) names.Append("(只读)");
-                if (d.requireConfirm) names.Append("(需确认)");
-            }
-            Debug.Log("[ToolRegistry] 工具清单：" + names);
         }
 
         // ---------------- 用户权限（Esc 面板） ----------------
@@ -271,8 +228,7 @@ namespace PetFramework.Tools
             for (int i = 0; i < All.Count; i++)
             {
                 var d = All[i];
-                // 内置 / 角色动作池 / 配置里 enabled 的 MCP 默认开；其余外部工具（进程/HTTP）默认关
-                bool def = d.kind == ToolKind.Builtin || d.kind == ToolKind.Action || d.kind == ToolKind.Mcp;
+                bool def = d.kind == ToolKind.Builtin;     // 外部默认全关
                 bool v;
                 d.isEnabled = userPrefs.TryGetValue(d.name, out v) ? v : def;
             }

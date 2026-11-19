@@ -78,21 +78,6 @@ namespace PetFramework
     {
         public static PetAPI Instance { get; private set; }
 
-        /// <summary>
-        /// 安全地把 JToken 变字符串。
-        /// ⚠️ (string)token 只能用于 JValue(string)：对 JObject / JArray 会抛
-        ///    ArgumentException「Can not convert Object to String」——有些兼容服务端
-        ///    把 tool_calls.function.arguments 直接发成对象，老写法会整条响应炸掉。
-        /// </summary>
-        static string TokStr(JToken t)
-        {
-            if (t == null || t.Type == JTokenType.Null) return null;
-            if (t.Type == JTokenType.String) return (string)t;
-            if (t.Type == JTokenType.Object || t.Type == JTokenType.Array)
-                return t.ToString(Newtonsoft.Json.Formatting.None);
-            return t.ToString();
-        }
-
         [Header("接口配置（会被 EXE 同级的 config.json 覆盖）")]
         [Tooltip("协议：Ollama = 本地原生 /api/chat；OpenAI = 云端 OpenAI 兼容 /v1/chat/completions")]
         public PetApiProvider provider = PetApiProvider.Ollama;
@@ -101,15 +86,7 @@ namespace PetFramework
         public string model = "qwen3.5:4b";
         [Tooltip("云端必填，例如硅基流动的 sk-xxx。本地 Ollama 留空即可")]
         public string apiKey = "";
-        [Tooltip("可选：聊天接口路径。留空 = 按协议自动补" +
-                 "（OpenAI → /v1/chat/completions，Ollama → /api/chat）。" +
-                 "本地推理服务路径不一样时填这里。")]
-        public string chatPath = "";
         public int timeoutSec = 30;                  // 实测带图+工具 13~26s，15s 会经常踩线
-        [Tooltip("OpenAI 兼容服务用流式（SSE）：边收边显示，第一个字出现得更早")]
-        public bool enableStreaming = true;
-        /// <summary>流式文本增量（已经在内部累加成完整文本再回调）。</summary>
-        [System.NonSerialized] public Action<string> onStreamDelta;
         public bool isRequesting;                    // 请求锁：忙时忽略空闲触发（防并发）
 
         [Header("视觉")]
@@ -124,11 +101,6 @@ namespace PetFramework
         public int passiveLimit = 3;                 // 连续多少轮"只说话不动"就本地强行让它去溜达
         int passiveStreak;
         int toolCallSeq;                             // 工具回环里给没有 id 的调用（Ollama）补个编号
-
-        [Header("主动搭话")]
-        [Tooltip("空闲时自己开口。⚠️ 它会在空闲时自己发请求、占住请求锁，"
-               + "导致你的聊天要排队 —— 需要安静时关掉。")]
-        public bool enableProactiveIdle = true;
 
         [Header("形态（多形态预留）")]
         [Tooltip("⚠️ 默认关闭。本地 4B 小模型一旦看到 switch_form，会频繁乱调它，"
@@ -164,13 +136,7 @@ namespace PetFramework
             if (PetMemory.Instance != null) PetMemory.Instance.onSummarize = Summarize;
             // 注入空闲上报钩子（找到小白）
             var brain = FindBrain();
-            if (brain != null)
-            {
-                // 主动搭话会自己发请求：聊天时会把请求锁占住（排队），
-                // 需要"安静一点"的角色可以关掉它。
-                if (enableProactiveIdle) brain.onIdleReport = ReportIdle;
-                brain.isApiBusy = () => isRequesting;
-            }
+            if (brain != null) { brain.onIdleReport = ReportIdle; brain.isApiBusy = () => isRequesting; }
             Debug.Log("[PetAPI] 就绪。协议=" + provider + " 端点=" + Endpoint() + " 模型=" + model
                 + " 超时=" + timeoutSec + "s 视觉=" + sendVision
                 + (string.IsNullOrEmpty(apiKey) ? " Key=无(本地)" : " Key=有(" + KeyHint() + ")"));
@@ -195,85 +161,13 @@ namespace PetFramework
         }
 
         // ---------- 主对话（聊天） ----------
-        Coroutine askCo;
-
-        // ---------- 按需看屏幕（look_screen） ----------
-        /// <summary>look_screen 刚抓到的截图（Base64 JPEG）。下一条请求会把它当图片附上。</summary>
-        [System.NonSerialized] string pendingScreenB64;
-        [System.NonSerialized] float pendingScreenAt = -999f;
-
-        /// <summary>把待发送的截图拼成一条 user 消息（OpenAI 用 content 数组，Ollama 用 images 字段）。</summary>
-        string TakePendingScreenMsg()
-        {
-            if (string.IsNullOrEmpty(pendingScreenB64)) return null;
-            // 超过 30 秒就作废：模型可能中途改主意，附一张旧图反而误导
-            if (Time.realtimeSinceStartup - pendingScreenAt > 30f) { pendingScreenB64 = null; return null; }
-
-            string b64 = pendingScreenB64;
-            pendingScreenB64 = null;
-
-            const string note = "[look_screen] 这是你刚刚请求的、对方此刻屏幕的最新截图（现场抓的，不是缓存）。看清楚了再回答。";
-            var o = new JObject();
-            o["role"] = "user";
-            if (provider == PetApiProvider.OpenAI)
-            {
-                var arr = new JArray();
-                var txt = new JObject(); txt["type"] = "text"; txt["text"] = note;
-                arr.Add(txt);
-                var img = new JObject(); img["type"] = "image_url";
-                var url = new JObject(); url["url"] = "data:image/jpeg;base64," + b64;
-                img["image_url"] = url;
-                arr.Add(img);
-                o["content"] = arr;
-            }
-            else
-            {
-                o["content"] = note;
-                var imgs = new JArray(); imgs.Add(b64);
-                o["images"] = imgs;
-            }
-            return o.ToString(Formatting.None);
-        }
-
         public void Ask(string userInput, Action<PetReply> cb)
         {
-            // ★ 主人说话 = 最高优先级：先掐掉正在跑的【主动搭话/空闲上报】，
-            //   否则 ChatRoutine 会卡在 while(isRequesting) 里等最多 90 秒，
-            //   表现就是「消息发出去一直没反应」，而小白还在自顾自念叨。
-            if (autoCo != null) { StopCoroutine(autoCo); autoCo = null; isRequesting = false; }
-            lastUserAskAt = Time.time;   // 用户说话后 90 秒内不再主动搭话，把模型算力留给用户
-            CancelAsk(false);   // 上一轮还没完就直接掐掉，别让两轮回复交叉写进界面
-            askCo = StartCoroutine(ChatRoutine(userInput, r =>
-            {
-                askCo = null;
-                if (cb != null) cb(r);
-            }));
+            StartCoroutine(ChatRoutine(userInput, cb));
         }
-
-        /// <summary>终止正在进行的对话请求（停止按钮）。</summary>
-        public void CancelAsk() { CancelAsk(true); }
-
-        void CancelAsk(bool clearStream)
-        {
-            if (askCo != null)
-            {
-                StopCoroutine(askCo);
-                askCo = null;
-            }
-            // ⚠️ StopCoroutine 不保证执行协程里的 finally，请求锁必须手动释放，
-            //    否则它会一直显示"忙"，自主搭话也全被挡住。
-            isRequesting = false;
-            if (clearStream) onStreamDelta = null;
-        }
-
-        /// <summary>发请求前的外部钩子（人格库/记忆注入用）：参数是用户这句原话。</summary>
-        [System.NonSerialized] public Action<string> onBeforeAsk;
-        /// <summary>拿到回复后的外部钩子：参数是（用户原话, 回复）。</summary>
-        [System.NonSerialized] public Action<string, PetReply> onAfterReply;
 
         IEnumerator ChatRoutine(string userInput, Action<PetReply> cb)
         {
-            if (onBeforeAsk != null) { try { onBeforeAsk(userInput); } catch (Exception e) { Debug.LogWarning("[PetAPI] onBeforeAsk: " + e.Message); } }
             var msgs = BuildBase();     // ★ 底座统一：系统提示 + 长期记忆 + 历史（三条路径完全一致）
             AddContext(msgs);   // 环境快照放在主人这句话【之前】，让主人的原话压轴
             msgs.Add(new OllamaMsg { role = "user", content = userInput });
@@ -323,7 +217,6 @@ namespace PetFramework
                     PetMemory.Instance.AddTurn(PetProfileConfig.UserName, userInput);
                     if (!string.IsNullOrEmpty(reply.text)) PetMemory.Instance.AddTurn(PetProfileConfig.PetName, reply.text);
                 }
-                if (onAfterReply != null) { try { onAfterReply(userInput, reply); } catch (Exception e) { Debug.LogWarning("[PetAPI] onAfterReply: " + e.Message); } }
                 if (cb != null) cb(reply);
             });
         }
@@ -358,15 +251,7 @@ namespace PetFramework
                     yield break;
                 }
 
-                bool agentCall = HasAgentTool(msg);
-                // 排查"模型说要调工具却没回传/没附截图"时，这一行是关键：
-                // calls=0 ⇒ 根本没解析出工具；agent=False ⇒ 被当成普通聊天工具执行了。
-                Debug.Log("[PetAPI] 响应工具判定：calls="
-                          + (msg.tool_calls == null ? 0 : msg.tool_calls.Length)
-                          + " agent=" + agentCall
-                          + (msg.tool_calls != null && msg.tool_calls.Length > 0 && msg.tool_calls[0].function != null
-                             ? " 首个=" + msg.tool_calls[0].function.name : ""));
-                if (!agentCall)
+                if (!HasAgentTool(msg))
                 {
                     // ★ 没有"干活型"工具 → 走 1.0 的老路径（含 say_and_speak 的文字）
                     var reply = Handle(msg, autonomous);
@@ -398,11 +283,6 @@ namespace PetFramework
                 for (int i = 0; i < resultRaws.Count; i++) rawExtra.Add(resultRaws[i]);
                 if (!string.IsNullOrEmpty(said)) pendingText = said;
 
-                // ★ look_screen：把刚抓到的截图作为一条 user 消息追加在这轮工具结果之后，
-                //   模型下一轮就能真正"看到"画面（OpenAI 走 content 数组，Ollama 走 images）。
-                string shot = TakePendingScreenMsg();
-                if (!string.IsNullOrEmpty(shot)) rawExtra.Add(shot);
-
                 round++;
                 Debug.Log("[PetAPI] 工具回环 " + round + "/" + maxRounds
                           + "（回传 " + resultRaws.Count + " 条结果）");
@@ -420,8 +300,7 @@ namespace PetFramework
                 var tc = msg.tool_calls[i];
                 if (tc == null || tc.function == null) continue;
                 var d = reg.Find(tc.function.name);
-                // ★ 内置也可能有 Agent 模式（文件读写）——它们同样需要把结果回传给模型
-                if (d != null && d.mode == ToolMode.Agent) return true;
+                if (d != null && d.kind != ToolKind.Builtin && d.mode == ToolMode.Agent) return true;
             }
             return false;
         }
@@ -449,9 +328,9 @@ namespace PetFramework
                 string args = string.IsNullOrEmpty(tc.function.argumentsRaw) ? "{}" : tc.function.argumentsRaw;
 
                 var d = reg != null ? reg.Find(name) : null;
-                if (d == null || (d.kind == ToolKind.Builtin && d.mode != ToolMode.Agent))
+                if (d == null || d.kind == ToolKind.Builtin)
                 {
-                    // 内置 + Chat：同步执行，1.0 的老路径，行为零改动
+                    // 内置：同步执行，1.0 的老路径，行为零改动
                     string said = ExecuteTool(tc, autonomous);
                     if (!string.IsNullOrEmpty(said) && onSaid != null) onSaid(said);
                     continue;
@@ -607,9 +486,6 @@ namespace PetFramework
             if (!string.IsNullOrEmpty(profile)) sys.Append(profile).Append("\n\n");
 
             sys.Append(systemPrompt);
-            // ★ 语言约束（写在提示词里而不是只靠模型自觉）
-            sys.Append("\n\n【语言】无论对方用什么语言、无论你在自言自语还是主动搭话，"
-                     + "**一律用简体中文回答**，不要输出英文单词或英文句子。");
 
             // 【多形态预留】只有打开了才提"变身"。
             // 关着的时候一个字都不提 ⇒ 模型既看不到工具、也看不到提示 ⇒ 现有行为零影响。
@@ -644,16 +520,6 @@ namespace PetFramework
                 }
             }
 
-            // ★ 工作区（F8 面板）的上下文：只给当前会话的摘要，不跨会话。
-            //   用 try/catch 兜底 —— 工作区是可选模块，出问题也不能把桌宠聊天拖垮。
-            try
-            {
-                string ws = PetFramework.Workspace.WorkspaceStore.ActiveDigest();
-                if (!string.IsNullOrEmpty(ws))
-                    sys.Append("\n\n[工作区（F8 面板，只是背景信息，别主动聊它）]\n").Append(ws);
-            }
-            catch (Exception e) { Debug.LogWarning("[PetAPI] 工作区上下文注入失败：" + e.Message); }
-
             // ★ 2.0：把注册中心里【所有启用】的工具列成一段人话清单。
             //    完整 JSON Schema 已经在 tools 参数里了，这里只放名字 + 一句话说明，
             //    避免提示词翻倍。
@@ -663,32 +529,12 @@ namespace PetFramework
                 if (!string.IsNullOrEmpty(sec)) sys.Append(sec);
             }
 
-            // ★★ 看屏幕的硬性护栏。
-            //    作者实测：主人说「下午好」，模型想"看一眼"，结果挑了 Blender 的 look
-            //    （画的是 Blender 3D 场景，不是桌面），还弹了一个毫无意义的审批框。
-            //    ⇒ 明确告诉它：屏幕本来就看得到；要更清楚就用 look_screen；
-            //      其它名字里带 look 的工具一律不许用来「看屏幕」。
-            sys.Append("\n\n【看屏幕·必须遵守】你每一轮都能直接看到对方屏幕的缩略图（随 [当前环境] 附上），"
-                     + "不需要调用任何工具去「看屏幕」。想看更清楚 / 更实时的画面，就调 look_screen，"
-                     + "它会立刻抓一张新截图并在下一轮作为图片附给你。"
-                     + "⚠️ look / get_scene_info / search_assets 这些是 Blender / Unity 的 3D 场景工具，"
-                     + "看到的是编辑器里的模型，不是对方的桌面 —— 绝对不要用它们来看屏幕。");
-
-            // ★ 上下文压缩：旧对话折叠成摘要，用户那边看到的历史一条不少
-            if (PetMemory.Instance != null)
-            {
-                PetMemory.Instance.CompactHistory(14);
-                string sum = PetMemory.Instance.GetChatSummary();
-                if (!string.IsNullOrEmpty(sum))
-                    sys.Append("\n\n[更早的对话摘要（压缩过，语义保留）]\n").Append(sum);
-            }
-
             var msgs = new List<OllamaMsg>();
             msgs.Add(new OllamaMsg { role = "system", content = sys.ToString() });
             if (PetMemory.Instance == null) return msgs;
 
             var hist = PetMemory.Instance.GetHistory();
-            int start = Mathf.Clamp(PetMemory.Instance.SummaryUpto, 0, hist.Count);
+            int start = 0;
             if (historyCharBudget > 0)
             {
                 int used = 0;
@@ -734,26 +580,9 @@ namespace PetFramework
         }
 
         // ---------- 空闲上报（AI 决策主导） ----------
-        Coroutine autoCo;
-        /// <summary>主人最后一次说话的时间（Time.time）。用于给主动搭话让路。</summary>
-        float lastUserAskAt = -9999f;
-        /// <summary>主人说话后多少秒内禁止自主请求（本地模型慢，两条并发会互相拖死）。</summary>
-        public float quietAfterUserAsk = 90f;
-
         public void ReportIdle(float idleSeconds, Action<PetReply> cb)
         {
-            // ★ 主人刚说完话的这段时间里，绝不要发自主请求：
-            //   本地模型只有一个算力池，空闲上报会和主人的提问抢，结果两边都 60s 超时，
-            //   表现就是「Tab 里发消息没反应」。
-            if (Time.time - lastUserAskAt < quietAfterUserAsk)
-            {
-                Debug.Log("[PetAPI] 主人刚说过话（" + (Time.time - lastUserAskAt).ToString("F0")
-                          + "s 前），本轮主动搭话跳过");
-                return;
-            }
-            // 新的主动请求前先把上一个掐掉，避免自我搭话排队堆积
-            if (autoCo != null) { StopCoroutine(autoCo); autoCo = null; isRequesting = false; }
-            autoCo = StartCoroutine(ReportRoutine(idleSeconds, cb));
+            StartCoroutine(ReportRoutine(idleSeconds, cb));
         }
         void ReportIdle(float idleSeconds)
         {
@@ -798,19 +627,10 @@ namespace PetFramework
             msgs.Add(new OllamaMsg { role = "user",
                 content = "（这是你的自主思考时刻，此刻没有人正在跟你说话）你已经 "
                         + Mathf.RoundToInt(idleSeconds) + " 秒没被对方搭理了。"
-                        + "请看看屏幕上的画面和环境数据，完全自主地决定要做什么，调用合适的工具去做。"
-                        + "如果要说话，必须用中文说（一句话，不超过 20 字）。" });
+                        + "请看看屏幕上的画面和环境数据，完全自主地决定要做什么，调用合适的工具去做。" });
 
             yield return AskRoutine(msgs, true, reply =>
             {
-                // ★ 主动搭话若吐出英文（模型偶尔会），直接丢掉这段"台词"，只保留动作 ——
-                //    桌宠对用户说话必须是中文，一屏英文很出戏。
-                if (reply != null && PetFramework.TextTools.IsEnglishOnly(reply.text))
-                {
-                    Debug.Log("[PetAPI] 主动搭话是英文，已丢弃：" + reply.text);
-                    reply.text = "";
-                }
-
                 // ★ 主动搭话也要写进历史 —— 大窗口的聊天记录才能看到"它自己凑过来"的那几句
                 if (reply != null && !string.IsNullOrEmpty(reply.text) && PetMemory.Instance != null)
                     PetMemory.Instance.AddProactiveTurn(reply.text);
@@ -871,24 +691,8 @@ namespace PetFramework
           + "\"description\":\"吃掉一个文件或文件夹（移入回收站，可恢复）。\","
           + "\"parameters\":{\"type\":\"object\",\"properties\":{"
           + "\"file_path\":{\"type\":\"string\",\"description\":\"要吃的文件完整路径\"}},"
-          + "\"required\":[\"file_path\"]}}}";
-
-        /// <summary>
-        /// 【按需看屏幕】。
-        /// 背景：每轮请求本来就会自动附一张缩略图，但 4B 模型有时候想「再看清楚一点」，
-        /// 就会去工具列表里挑一个名字像 look 的 —— 结果挑中了 Blender 的 look（3D 场景）。
-        /// 所以专门给它一个语义明确的入口：调它 ⇒ 立刻抓一张真实桌面 ⇒ 下一轮把图附上。
-        /// ⚠️ 这个工具必须是 Agent 模式（要回传结果、再跑一轮），不能是 Chat。
-        /// </summary>
-        const string LOOK_SCREEN_TOOL =
-            "{\"type\":\"function\",\"function\":{\"name\":\"look_screen\","
-          + "\"description\":\"★【想看屏幕就调它】立刻抓一张对方此刻整个屏幕的真实截图，下一轮会作为图片附给你。"
-          + "想问「屏幕上写了什么 / 他在干嘛 / 这个报错是什么 / 这个窗口是什么」时就调它。"
-          + "⚠️ 不要用 look / get_scene_info / search_assets 去看屏幕 —— 那些是 Blender 的 3D 场景工具，"
-          + "看到的是 Blender 里的模型，不是主人的桌面。\","
-          + "\"parameters\":{\"type\":\"object\",\"properties\":{"
-          + "\"reason\":{\"type\":\"string\",\"description\":\"你为什么要看（一句话，可省略）\"}},"
-          + "\"required\":[]}}}";
+          + "\"required\":[\"file_path\"]}}}"
+          + "]";
 
         /// <summary>
         /// 【多形态预留】switch_form 的工具定义。
@@ -923,12 +727,8 @@ namespace PetFramework
         /// <summary>给 BuiltinToolSource 用的静态入口。</summary>
         public static string LegacyToolsJsonStatic(bool withSwitchForm)
         {
-            var sb = new StringBuilder(TOOLS_JSON.Length + 512);
-            sb.Append(TOOLS_JSON);                       // 注意：TOOLS_JSON 本身【没有】结尾的 ]
-            sb.Append(",").Append(LOOK_SCREEN_TOOL);     // 按需看屏幕（永远是内置工具）
-            if (withSwitchForm) sb.Append(",").Append(SWITCH_FORM_TOOL);
-            sb.Append("]");
-            return sb.ToString();
+            if (!withSwitchForm) return TOOLS_JSON;
+            return TOOLS_JSON.Substring(0, TOOLS_JSON.Length - 1) + "," + SWITCH_FORM_TOOL + "]";
         }
 
         /// <summary>
@@ -1079,19 +879,6 @@ namespace PetFramework
             string u = (baseUrl ?? "").Trim().TrimEnd('/');
             if (u.Length == 0) u = "http://localhost:11434";
 
-            // ★ config.json 里手填的聊天路径优先（ONW / vLLM / LM Studio 等本地服务的路径可能不一样）。
-            //   支持三种写法：
-            //     ① 完整 URL：http://localhost:8001/v1/chat/completions → 原样用
-            //     ② 以 / 开头：/v1/chat/completions → 拼在 baseUrl 后面
-            //     ③ 不带 /：  v1/chat/completions → 同样拼在 baseUrl 后面
-            string cp = (chatPath ?? "").Trim();
-            if (cp.Length > 0)
-            {
-                if (cp.StartsWith("http://") || cp.StartsWith("https://")) return cp;
-                if (!cp.StartsWith("/")) cp = "/" + cp;
-                return u + cp;
-            }
-
             if (provider == PetApiProvider.Ollama)
             {
                 if (u.EndsWith("/api/chat")) return u;
@@ -1145,64 +932,36 @@ namespace PetFramework
                     + "　→ " + provider + " " + url + (string.IsNullOrEmpty(apiKey) ? "（无 Key）" : "（带 Key）"));
 
                 string body = BuildBody(msgs, rawExtra);
-
-                // ★ 流式：OpenAI 兼容服务才用（Ollama 原生协议那边保持原样，免得踩坑）
-                bool useStream = enableStreaming && provider == PetApiProvider.OpenAI;
-                PetSseHandler sse = null;
-                if (useStream)
-                {
-                    body = body.Replace("\"stream\":false", "\"stream\":true");
-                    sse = new PetSseHandler(d => { if (onStreamDelta != null) onStreamDelta(d); });
-                }
-
                 using (var www = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
                 {
                     www.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-                    www.downloadHandler = sse != null ? (DownloadHandler)sse : new DownloadHandlerBuffer();
+                    www.downloadHandler = new DownloadHandlerBuffer();
                     www.SetRequestHeader("Content-Type", "application/json");
                     // 云端 OpenAI 兼容接口要 Bearer 鉴权；本地 Ollama 不需要（留空就不发这个头）
                     if (!string.IsNullOrEmpty(apiKey))
                         www.SetRequestHeader("Authorization", "Bearer " + apiKey.Trim());
-                    // ★ 本地模型带 31 个工具 + 视觉要 30~90 秒才吐第一个 token。
-                    //   以前直接用 timeoutSec(30/60) ⇒ 每轮都在 60s 被 UnityWebRequest 掐断，
-                    //   日志一排「500 Request timeout」，界面上就是"发出去没反应"。
-                    //   这里给足 300 秒；用户按停止按钮仍然能立即中断。
-                    int effTimeout = Mathf.Max(300, timeoutSec);
-                    www.timeout = effTimeout;
+                    www.timeout = timeoutSec;
                     yield return www.SendWebRequest();
 
                     if (www.result != UnityWebRequest.Result.Success)
                     {
-                        string errBody = sse != null ? sse.RawHead : (www.downloadHandler != null ? www.downloadHandler.text : "");
+                        string errBody = (www.downloadHandler != null ? www.downloadHandler.text : "");
                         if (errBody.Length > 300) errBody = errBody.Substring(0, 300);
                         Debug.LogWarning("[PetAPI] 请求失败：" + www.responseCode + " " + www.error + " | body=" + errBody
-                            + "   （Ollama 起来了吗？端点=" + baseUrl + " 超时=" + effTimeout + "s）");
+                            + "   （Ollama 起来了吗？端点=" + baseUrl + " 超时=" + timeoutSec + "s）");
                         if (onMsg != null) onMsg(null);
                         yield break;
                     }
 
+                    string raw = www.downloadHandler.text;
                     OllamaMsg msg = null;
-                    if (sse != null)
-                    {
-                        msg = sse.ToMessage();
-                        if (msg == null || (string.IsNullOrEmpty(msg.content) && msg.tool_calls == null))
-                        {
-                            string r = sse.RawHead;
-                            if (r.Length > 300) r = r.Substring(0, 300);
-                            Debug.LogWarning("[PetAPI] 流式响应为空，原始片段=" + r);
-                        }
-                    }
-                    else
-                    {
-                        string raw = www.downloadHandler.text;
-                        try { msg = ParseResponse(raw); }
-                        catch (Exception e) { Debug.LogWarning("[PetAPI] 解析响应失败：" + e.Message); }
+                    try { msg = ParseResponse(raw); }
+                    catch (Exception e) { Debug.LogWarning("[PetAPI] 解析响应失败：" + e.Message); }
 
-                        if (msg == null)
-                        {
-                            string r = raw.Length > 300 ? raw.Substring(0, 300) : raw;
-                            Debug.LogWarning("[PetAPI] 响应无法解析，原始=" + r);
-                        }
+                    if (msg == null)
+                    {
+                        string r = raw.Length > 300 ? raw.Substring(0, 300) : raw;
+                        Debug.LogWarning("[PetAPI] 响应无法解析，原始=" + r);
                     }
                     if (onMsg != null) onMsg(msg);
                 }
@@ -1216,196 +975,6 @@ namespace PetFramework
         /// OpenAI:  {"choices":[{"message":{"content":"..","tool_calls":[{"function":{"arguments":"{...}"}}]}}]}
         ///         ⚠️ 注意 OpenAI 的 arguments 是【JSON 字符串】，得再解析一层。
         /// </summary>
-        /// <summary>
-        /// OpenAI 的 SSE 流解析器：逐行 data: {...}，把 delta.content 累加、delta.tool_calls 按 index 拼装。
-        /// ⚠️ 有些本地服务（ONW 等）在 stream 模式下不返回结构化 tool_calls，
-        ///    而是把 Qwen 的文本格式 &lt;tool_call&gt;&lt;function=x&gt;… 塞进 content —— ToMessage 里再做一次解析。
-        /// </summary>
-        class PetSseHandler : DownloadHandlerScript
-        {
-            public readonly StringBuilder Text = new StringBuilder();
-            readonly Dictionary<int, StringBuilder> argBuf = new Dictionary<int, StringBuilder>();
-            readonly Dictionary<int, string> names = new Dictionary<int, string>();
-            readonly Dictionary<int, string> ids = new Dictionary<int, string>();
-            readonly Action<string> onDelta;
-            string pending = "";
-            public string RawHead = "";
-
-            public PetSseHandler(Action<string> onDelta) : base(new byte[4096]) { this.onDelta = onDelta; }
-
-            protected override bool ReceiveData(byte[] data, int len)
-            {
-                if (data == null || len <= 0) return false;
-                pending += Encoding.UTF8.GetString(data, 0, len);
-                int idx;
-                while ((idx = pending.IndexOf('\n')) >= 0)
-                {
-                    string line = pending.Substring(0, idx).TrimEnd('\r');
-                    pending = pending.Substring(idx + 1);
-                    Handle(line);
-                }
-                return true;
-            }
-
-            void Handle(string line)
-            {
-                if (string.IsNullOrEmpty(line) || !line.StartsWith("data:")) return;
-                string payload = line.Substring(5).Trim();
-                if (payload.Length == 0 || payload == "[DONE]") return;
-
-                JObject j;
-                try { j = JObject.Parse(payload); } catch { return; }
-
-                var choices = j["choices"] as JArray;
-                if (choices == null || choices.Count == 0)
-                {
-                    if (RawHead.Length < 400) RawHead += payload + " ";
-                    return;
-                }
-                var d = choices[0]["delta"] as JObject;
-                if (d == null) return;
-
-                string c = TokStr(d["content"]);
-                if (!string.IsNullOrEmpty(c))
-                {
-                    Text.Append(c);
-                    if (onDelta != null) onDelta(Text.ToString());
-                }
-
-                var tc = d["tool_calls"] as JArray;
-                if (tc != null)
-                {
-                    for (int i = 0; i < tc.Count; i++)
-                    {
-                        var t = tc[i] as JObject;
-                        if (t == null) continue;
-                        int index = t["index"] != null ? (int)t["index"] : 0;
-                        string idv = TokStr(t["id"]);
-                        if (!string.IsNullOrEmpty(idv)) ids[index] = idv;
-                        var fn = t["function"] as JObject;
-                        if (fn == null) continue;
-                        string nm = TokStr(fn["name"]);
-                        if (!string.IsNullOrEmpty(nm)) names[index] = nm;
-                        string a = TokStr(fn["arguments"]);
-                        if (a != null)
-                        {
-                            StringBuilder sb;
-                            if (!argBuf.TryGetValue(index, out sb)) { sb = new StringBuilder(); argBuf[index] = sb; }
-                            sb.Append(a);
-                        }
-                    }
-                }
-            }
-
-            public OllamaMsg ToMessage()
-            {
-                string text = Text.ToString();
-                var calls = new List<ToolCall>();
-
-                // ① 结构化 tool_calls
-                foreach (var kv in argBuf)
-                {
-                    int i = kv.Key;
-                    string name = names.ContainsKey(i) ? names[i] : "";
-                    if (string.IsNullOrEmpty(name)) continue;
-                    string rawArgs = kv.Value.ToString();
-                    ToolArgs args = null;
-                    try { args = JsonUtility.FromJson<ToolArgs>(rawArgs); } catch { }
-                    calls.Add(new ToolCall
-                    {
-                        id = ids.ContainsKey(i) ? ids[i] : ("call_" + i),
-                        function = new ToolCallFunction { index = i, name = name, arguments = args, argumentsRaw = rawArgs }
-                    });
-                }
-
-                // ② 文本形式 <tool_call>…</tool_call>
-                if (calls.Count == 0 && text.IndexOf("<tool_call>", StringComparison.Ordinal) >= 0)
-                {
-                    string clean;
-                    var parsed = ParseTextCalls(text, out clean);
-                    if (parsed != null) { calls = parsed; text = clean; }
-                }
-
-                if (calls.Count == 0 && string.IsNullOrEmpty(text)) return null;
-                return new OllamaMsg
-                {
-                    role = "assistant",
-                    content = text,
-                    tool_calls = calls.Count > 0 ? calls.ToArray() : null
-                };
-            }
-
-            /// <summary>解析 &lt;tool_call&gt; 文本（JSON 或 Qwen 的 &lt;function=&gt;&lt;parameter=&gt; 两种）。</summary>
-            static List<ToolCall> ParseTextCalls(string text, out string clean)
-            {
-                clean = text;
-                var list = new List<ToolCall>();
-                var sb = new StringBuilder();
-                int pos = 0;
-                while (true)
-                {
-                    int s = text.IndexOf("<tool_call>", pos, StringComparison.Ordinal);
-                    if (s < 0) { sb.Append(text.Substring(pos)); break; }
-                    sb.Append(text.Substring(pos, s - pos));
-                    int e = text.IndexOf("</tool_call>", s, StringComparison.Ordinal);
-                    if (e < 0) { sb.Append(text.Substring(s)); break; }
-                    string block = text.Substring(s + 11, e - s - 11).Trim();
-                    pos = e + 12;
-
-                    string name = null;
-                    string rawArgs = "{}";
-                    try
-                    {
-                        var jo = JObject.Parse(block);
-                        if (jo["name"] != null)
-                        {
-                            name = (string)jo["name"];
-                            var ag = jo["arguments"];
-                            rawArgs = ag == null ? "{}" : (ag.Type == JTokenType.String ? (string)ag : ag.ToString(Newtonsoft.Json.Formatting.None));
-                        }
-                    }
-                    catch { }
-
-                    if (string.IsNullOrEmpty(name))
-                    {
-                        int fs = block.IndexOf("<function=", StringComparison.Ordinal);
-                        if (fs >= 0)
-                        {
-                            int fe = block.IndexOf('>', fs);
-                            name = fe > fs ? block.Substring(fs + 10, fe - fs - 10).Trim() : null;
-                            var args = new JObject();
-                            int p = fe > 0 ? fe : 0;
-                            while (true)
-                            {
-                                int ps = block.IndexOf("<parameter=", p, StringComparison.Ordinal);
-                                if (ps < 0) break;
-                                int pe = block.IndexOf('>', ps);
-                                if (pe < 0) break;
-                                string key = block.Substring(ps + 11, pe - ps - 11).Trim();
-                                int vs = pe + 1;
-                                int ve = block.IndexOf("</parameter>", vs, StringComparison.Ordinal);
-                                if (ve < 0) break;
-                                args[key] = block.Substring(vs, ve - vs);
-                                p = ve + 12;
-                            }
-                            rawArgs = args.ToString(Newtonsoft.Json.Formatting.None);
-                        }
-                    }
-
-                    if (string.IsNullOrEmpty(name)) continue;
-                    ToolArgs ta = null;
-                    try { ta = JsonUtility.FromJson<ToolArgs>(rawArgs); } catch { }
-                    list.Add(new ToolCall
-                    {
-                        id = "call_" + list.Count,
-                        function = new ToolCallFunction { index = list.Count, name = name, arguments = ta, argumentsRaw = rawArgs }
-                    });
-                }
-                clean = sb.ToString().Trim();
-                return list.Count > 0 ? list : null;
-            }
-        }
-
         OllamaMsg ParseResponse(string raw)
         {
             if (provider != PetApiProvider.OpenAI)
@@ -1556,36 +1125,14 @@ namespace PetFramework
             {
                 function = new ToolCallFunction { name = name, arguments = a, argumentsRaw = argsJson }
             };
-            return ExecuteTool(call, autonomous, true);   // ⚠️ true = 别再转回注册中心（否则死循环）
+            return ExecuteTool(call, autonomous);
         }
 
         /// <summary>执行一个工具调用（都在主线程的协程回调里，安全）。返回 say_and_speak 说的话，其余返回 null。</summary>
-        /// <param name="fromRegistry">
-        /// true = 这次调用是从 BuiltinToolSource → ExecuteBuiltinTool 回来的。
-        /// ⚠️ 必须传 true，否则内置的 Agent 工具（look_screen）会在
-        ///    ExecuteTool → ToolRegistry → BuiltinToolSource → ExecuteBuiltinTool → ExecuteTool
-        ///    之间无限套娃。
-        /// </param>
-        string ExecuteTool(ToolCall call, bool autonomous, bool fromRegistry = false)
+        string ExecuteTool(ToolCall call, bool autonomous)
         {
             if (call == null || call.function == null) return null;
             string name = call.function.name;
-
-            // ⚠️ 注册中心里的「非内置」工具（外部 process/http/mcp、角色动作池 doDance/doSit …）
-            //    必须先在这里拦下来：流式回复走的是 Handle() → ExecuteTool()，这条路以前只认
-            //    桌宠那 6 个内置名字，于是模型明明调对了外部工具，也会被判成「未知工具」。
-            var reg0 = ToolRegistry.Instance;
-            var desc0 = reg0 != null ? reg0.Find(name) : null;
-            if (!fromRegistry)
-                Debug.Log("[PetAPI] 工具路由：「" + name + "」 desc="
-                          + (desc0 == null ? "null" : ("kind=" + desc0.kind + " mode=" + desc0.mode)));
-            if (!fromRegistry && desc0 != null && (desc0.kind != ToolKind.Builtin || desc0.mode == ToolMode.Agent))
-            {
-                Debug.Log("[PetAPI] 🔧 工具交给注册中心 → " + name);
-                StartCoroutine(reg0.Invoke(name, call.function.argumentsRaw ?? "{}", autonomous, r => { }));
-                return null;
-            }
-
             var a = call.function.arguments;
             if (a == null) { Debug.LogWarning("[PetAPI] 工具 " + name + " 没有参数"); return null; }
 
@@ -1634,23 +1181,6 @@ namespace PetFramework
                     TTS.Speak(a.text, false);   // 动画已经在上一行决定过了，别再让 TTS 改一次
                     Debug.Log("[PetAPI] " + PetProfileConfig.PetName + "说：「" + a.text + "」 情绪=" + a.emotion);
                     return a.text;
-
-                case "look_screen":
-                    // 现场抓一张（不是缓存）：CaptureThumbnail 是同步的 GDI 抓屏，几十毫秒。
-                    // 抓完把 Base64 放进 pendingScreen，AskRoutine 会在这一轮工具结果之后
-                    // 追加一条带图的消息，模型下一轮就能真正看到。
-                    if (PetContext.Instance != null)
-                    {
-                        PetContext.Instance.CaptureThumbnail();
-                        pendingScreenB64 = PetContext.Instance.GetVisionBase64();
-                        pendingScreenAt = Time.realtimeSinceStartup;
-                        Debug.Log("[PetAPI] 📸 look_screen → 抓屏 "
-                                  + (string.IsNullOrEmpty(pendingScreenB64)
-                                     ? "失败"
-                                     : (pendingScreenB64.Length / 1024) + "KB Base64"));
-                    }
-                    else Debug.LogWarning("[PetAPI] look_screen：场景里没有 PetContext，抓不了屏");
-                    return null;
 
                 case "remember_rule":
                     if (string.IsNullOrEmpty(a.rule)) return null;
@@ -1763,13 +1293,6 @@ namespace PetFramework
                 if (p != null && !string.IsNullOrEmpty(p.text))
                 {
                     reply.action = string.IsNullOrEmpty(p.action) ? "talk" : p.action;
-                    // 文字本身是动作名（look_back / idle …）⇒ 只当动作执行，不当台词
-                    if (PetFramework.TextTools.IsBareActionWord(p.text))
-                    {
-                        reply.action = MapState(p.text);
-                        reply.text = "";
-                        return reply;
-                    }
                     reply.text = p.text;
                     return reply;
                 }
@@ -1785,14 +1308,7 @@ namespace PetFramework
                 //    【这里以前直接把整段丢掉】→ ChatUI 显示「没收到回复」，
                 //    用户以为是超时，其实是它的回答被我们误杀了。
                 //    现在：只要像句人话就收下（掐到第一句、最多 60 字）。
-                string plain = CleanPlain(PetFramework.TextTools.StripToolSyntax(content));
-                if (PetFramework.TextTools.IsBareActionWord(plain))
-                {
-                    // 它只是报了个动作名（look_back）⇒ 做动作，不说话
-                    reply.action = MapState(plain); reply.text = "";
-                    Debug.Log("[PetAPI] 模型只给了动作名 → " + reply.action);
-                    return reply;
-                }
+                string plain = CleanPlain(content);
                 if (plain.Length == 0)
                 {
                     reply.action = "Idle"; reply.text = "";
@@ -1812,30 +1328,6 @@ namespace PetFramework
         }
 
         /// <summary>把模型的大白话清理成一句能念的话：去代码栅栏、掐掉第一句、限长 60 字。</summary>
-        /// <summary>把模型吐的裸动作名映射成 Animator 状态名。</summary>
-        static string MapState(string word)
-        {
-            string s = (word ?? "").Trim().TrimStart('/').Trim().ToLowerInvariant();
-            switch (s)
-            {
-                case "look_back": case "lookback": return "LookBack";
-                case "switch_form": case "switchform": return "SwitchForm";
-                case "idle": return "Idle";
-                case "walk": return "Walk";
-                case "run": return "Run";
-                case "sit": return "Sit";
-                case "sleep": return "Sleep";
-                case "talk": return "Talk";
-                case "jump": return "Jump";
-                case "drag": return "Drag";
-                case "drop": return "Drop";
-                case "pet": return "Pet";
-                case "dance": return "Dance";
-                case "wander": return "Walk";
-                default: return "Idle";
-            }
-        }
-
         static string CleanPlain(string s)
         {
             if (string.IsNullOrEmpty(s)) return "";

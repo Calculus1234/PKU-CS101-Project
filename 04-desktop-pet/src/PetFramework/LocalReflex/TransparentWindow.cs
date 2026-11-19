@@ -20,70 +20,11 @@ namespace PetFramework
         [Header("窗口行为")]
         public bool borderless = true;
         public bool topMost = true;
-
-        [Tooltip("排查用：工作区打开时每秒打印一行穿透判定")]
-        public bool wsDiag = false;
-
-        /// <summary>把窗口拉到前台并激活 —— 工作区打开后必须这样，否则点击不会进到 Unity。</summary>
-        public static void FocusWindow()
-        {
-            var tw = UnityEngine.Object.FindFirstObjectByType<TransparentWindow>();
-            if (tw == null) return;
-    #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            try
-            {
-                if (tw.hwnd == IntPtr.Zero) return;
-                SetForegroundWindow(tw.hwnd);
-                SetActiveWindow(tw.hwnd);
-            }
-            catch { }
-    #endif
-        }
-
-        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
-        [DllImport("user32.dll")] static extern IntPtr SetActiveWindow(IntPtr h);
-
-        /// <summary>工作区打开时把窗口从“始终置顶”降下来，让别的程序能盖住它。</summary>
-        public static void SetTopMost(bool on)
-        {
-            var tw = UnityEngine.Object.FindFirstObjectByType<TransparentWindow>();
-            if (tw == null) return;
-            tw.topMost = on;
-            tw.ReapplyTopMost();
-        }
-
-        void ReapplyTopMost()
-        {
-    #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            if (hwnd == IntPtr.Zero) return;
-            try
-            {
-                if (topMost)
-                {
-                    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                }
-                else
-                {
-                    // ⚠️ 必须用 HWND_NOTOPMOST 显式“退出置顶层”，
-                    //    只传 HWND_TOP 不会清掉 WS_EX_TOPMOST 位 —— 窗口依旧盖在所有程序上面。
-                    SetExStyleBits(0, WS_EX_TOPMOST);
-                    SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                }
-            }
-            catch { }
-    #endif
-        }
         public bool coverFullScreen = true;
         public int applyRetryFrames = 10;   // 前几帧重复应用，等窗口就绪
 
         [Tooltip("编辑器里跳过窗口改造。⚠️ 必须保持勾选！")]
         public bool skipInEditor = true;
-
-        [Tooltip("挂 WM_NCHITTEST 钩子（第二道保险）。" +
-                 "⚠️ 实测分层窗口上 HTTRANSPARENT 并不能让点击穿到桌面，真正起作用的" +
-                 "是下面逐帧切 WS_EX_TRANSPARENT；而这个原生回调一旦抛异常会直接把进程带走，" +
-                 "所以打包版默认关掉。")]
-        public bool useHitTestHook = false;
 
     #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
         [StructLayout(LayoutKind.Sequential)]
@@ -94,7 +35,6 @@ namespace PetFramework
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int X, int Y, int cx, int cy, uint flags);
-        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
         [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS m);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
         [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
@@ -108,32 +48,6 @@ namespace PetFramework
         const int WM_NCHITTEST = 0x0084;
         const int HTCLIENT = 1;
         const int HTTRANSPARENT = -1;
-
-        // ---- 锁死窗口位置/尺寸 ----
-        // ⚠️⚠️ 真凶（2026-11-18 从 Player.log 实锤）：
-        //    拖动小白时整个窗口也在跟着鼠标跑。日志里每拖一下就出现
-        //    「窗口位置漂了 [179,336,3059,2136]」这种 2880x1800 的窗口被平移的记录。
-        //    窗口是 DwmExtendFrameIntoClientArea(-1) 的「整窗玻璃边框」窗口，
-        //    系统会把客户区当成标题栏（HTCAPTION）⇒ 左键一按一拖 = 拖整个窗口。
-        //    窗口一漂，2 秒一次的 → (0,0) 校正就把画面猛拽回去 ⇒ 用户看到「闪现回原位」。
-        //    ✅ 两道根治：① WM_NCHITTEST 永不返回 HTCAPTION；② WM_WINDOWPOSCHANGING 里
-        //       把任何移动/缩放请求强行改回 (0,0,屏幕宽,屏幕高)，窗口从物理上不可移动。
-        const uint WM_WINDOWPOSCHANGING = 0x0046;
-        const uint WM_SYSCOMMAND = 0x0112;
-        const uint SC_MOVE = 0xF010;
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct WINDOWPOS
-        {
-            public IntPtr hwnd;
-            public IntPtr hwndInsertAfter;
-            public int x, y, cx, cy;
-            public uint flags;
-        }
-
-        static bool s_lockPos;          // ApplyTransparency 成功后打开
-        static int s_coverW, s_coverH;  // 锁定的目标尺寸
-        static int s_posBlockCount;
 
         [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
         static extern IntPtr CallWindowProc(IntPtr prev, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -177,43 +91,17 @@ namespace PetFramework
 
         static IntPtr WndProcHook(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
-            // ⚠️ 原生回调里抛异常会直接把进程带走 —— 整段包 try，任何意外都退回 DefWindowProc。
-            try
+            if (msg == WM_NCHITTEST)
             {
-                // ① 窗口不可移动/不可缩放：谁来改都按回 (0,0,screenW,screenH)
-                if (msg == WM_WINDOWPOSCHANGING && s_lockPos && lParam != IntPtr.Zero)
+                var mgr = PetWindowManager.Instance;
+                if (mgr != null && mgr.IsDashboardOpen)
                 {
-                    WINDOWPOS wp = (WINDOWPOS)Marshal.PtrToStructure(lParam, typeof(WINDOWPOS));
-                    bool badX = wp.x != 0 || wp.y != 0;
-                    bool badW = (wp.cx != 0 && wp.cx != s_coverW) || (wp.cy != 0 && wp.cy != s_coverH);
-                    if (badX || badW)
-                    {
-                        int rx = wp.x, ry = wp.y, rw = wp.cx, rh = wp.cy;
-                        wp.x = 0; wp.y = 0;
-                        if (s_coverW > 0) wp.cx = s_coverW;
-                        if (s_coverH > 0) wp.cy = s_coverH;
-                        wp.flags &= ~(SWP_NOMOVE | SWP_NOSIZE);   // 清掉“忽略位置/尺寸”，否则改了也白改
-                        Marshal.StructureToPtr(wp, lParam, false);
-                        if (s_posBlockCount < 5)
-                        {
-                            s_posBlockCount++;
-                            Debug.Log("[TransparentWindow] 拦下窗口移动请求 [" + rx + "," + ry + "," + rw + "," + rh
-                                      + "]（已按回 0,0," + s_coverW + "," + s_coverH + "）");
-                        }
-                    }
+                    long lp = lParam.ToInt64();
+                    int sx = (short)(lp & 0xFFFF);
+                    int sy = (short)((lp >> 16) & 0xFFFF);
+                    return (IntPtr)(DashboardHit(hWnd, sx, sy) ? HTCLIENT : HTTRANSPARENT);
                 }
-
-                // ② 系统菜单里的“移动”直接吞掉（Alt+F7 / 系统菜单）
-                if (msg == WM_SYSCOMMAND && ((uint)wParam.ToInt64() & 0xFFF0) == SC_MOVE)
-                    return IntPtr.Zero;
-
-                // ③ 命中测试永远不当标题栏。
-                //    整窗穿透由逐帧切 WS_EX_TRANSPARENT 负责（那才是可靠通道）；
-                //    这里只保证“可交互”的那些帧不会被系统理解成按住标题栏拖窗口。
-                if (msg == WM_NCHITTEST)
-                    return (IntPtr)HTCLIENT;
             }
-            catch { }
 
             if (s_oldWndProc == IntPtr.Zero) return IntPtr.Zero;
             return CallWindowProc(s_oldWndProc, hWnd, msg, wParam, lParam);
@@ -227,33 +115,15 @@ namespace PetFramework
         /// 正确做法：先把点转成【客户区坐标】，再按 客户区尺寸→Screen 尺寸 的比例缩放。
         /// </summary>
         /// <summary>光标当前是否压在主面板上（逐帧用于切换整窗穿透）。</summary>
-        /// <summary>
-        /// 把系统光标（物理像素）换算成 Unity 屏幕坐标。
-        /// ⚠️ 这台机器 200% 缩放：窗口客户区是 1440×900（Screen.width/height），
-        ///    但 GetCursorPos 返回物理 2880×1800 —— 不做换算的话，
-        ///    「光标在不在面板上」永远算错 ⇒ 工作区全透明可点（点不动）。
-        /// </summary>
-        public static Vector2 CursorToUnity()
-        {
-            POINT p;
-            if (!GetCursorPos(out p)) return Vector2.zero;
-            int sw = GetSystemMetrics(0), sh = GetSystemMetrics(1);
-            float rx = sw > 0 ? (float)Screen.width / sw : 1f;
-            float ry = sh > 0 ? (float)Screen.height / sh : 1f;
-            return new Vector2(p.x * rx, Screen.height - p.y * ry);
-        }
-
-        [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
-
         bool CursorOverDashboard(PetWindowManager mgr)
         {
-            return mgr.IsPointInsideDashboard(CursorToUnity());
-        }
-
-        /// <summary>光标是否在工作区面板上（F8 那个独立面板）。</summary>
-        bool CursorOverWorkspace(PetFramework.Workspace.WorkspaceUI ws)
-        {
-            return ws.ContainsScreenPoint(CursorToUnity());
+            POINT p;
+            if (!GetCursorPos(out p)) return false;
+            IntPtr h = hwnd != IntPtr.Zero ? hwnd : s_hookedHwnd;
+            float nx, ny;
+            if (ToNormalizedClient(h, p.x, p.y, out nx, out ny))
+                return mgr.IsNormalizedPointInsideDashboard(nx, ny);
+            return false;
         }
 
         /// <summary>主面板当前是否开着（给其它 WndProc 钩子用）。</summary>
@@ -269,11 +139,6 @@ namespace PetFramework
         /// </summary>
         public static bool DashboardHit(IntPtr hWnd, int screenX, int screenY)
         {
-            // 工作区面板（F8）和主面板是两套独立 UI，任意一个盖住这个点都算“可点”
-            var ws = PetFramework.Workspace.WorkspaceUI.Instance;
-            if (ws != null && ws.IsOpen && ws.ContainsScreenPoint(new Vector2(screenX, Screen.height - screenY)))
-                return true;
-
             var mgr = PetWindowManager.Instance;
             if (mgr == null || !mgr.IsDashboardOpen) return false;
 
@@ -325,13 +190,11 @@ namespace PetFramework
         const int WS_EX_TRANSPARENT = 0x00000020;
         const int WS_EX_ACCEPTFILES = 0x00000010;
         static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
         const uint SWP_SHOWWINDOW = 0x0040;
         const uint SWP_NOMOVE = 0x0002;
         const uint SWP_NOSIZE = 0x0001;
         const uint SWP_NOACTIVATE = 0x0010;
         float nextTopmostCheck;
-        float nextWsDiag;
         static IntPtr lastForeground;
         bool loggedTopmostRestore;
 
@@ -366,32 +229,6 @@ namespace PetFramework
             if (want != cur) SetLong(GWL_EXSTYLE, want);
         }
 
-        float nextCoverCheck;
-
-        /// <summary>窗口必须严格盖住屏幕 (0,0,w,h)。位置一漂，宠物的"屏幕边界"就全错了。</summary>
-        void EnsureCoverFullScreen()
-        {
-            if (hwnd == IntPtr.Zero) return;
-
-            var pet = FindPet();
-            var brain = pet != null ? pet.GetComponent<PetBrain>() : null;
-            // ⚠️ 拖动过程中绝不碰窗口：一旦窗口动了，Input.mousePosition 与世界的映射会瞬间错位，
-            //    表现就是「拖一半闪一下」。窗口现在已经由 WM_WINDOWPOSCHANGING 锁死，正常不会漂。
-            if (brain != null && brain.IsDragging) return;
-
-            int w = Screen.currentResolution.width;
-            int h = Screen.currentResolution.height;
-            s_coverW = w; s_coverH = h;
-
-            RECT r;
-            if (!GetWindowRect(hwnd, out r)) return;
-            if (r.left == 0 && r.top == 0 && (r.right - r.left) == w && (r.bottom - r.top) == h) return;
-            Debug.Log("[TransparentWindow] 窗口位置漂了 [" + r.left + "," + r.top + "," + r.right + "," + r.bottom
-                      + "] → 校正为 (0,0," + w + "," + h + ")");
-            SetWindowPos(hwnd, topMost ? HWND_TOPMOST : IntPtr.Zero, 0, 0, w, h,
-                SWP_SHOWWINDOW | SWP_NOACTIVATE);
-        }
-
         void ApplyTransparency()
         {
             if (hwnd == IntPtr.Zero) hwnd = WindowUtil.FindMainWindow();
@@ -406,19 +243,11 @@ namespace PetFramework
                 appliedThrough ? 0 : WS_EX_TRANSPARENT);
 
             if (coverFullScreen)
-            {
-                s_coverW = Screen.currentResolution.width;
-                s_coverH = Screen.currentResolution.height;
-                // SWP_NOACTIVATE：校正窗口时绝不能把焦点/激活状态改掉（拖动中途被激活最容易丢鼠标事件）
-                SetWindowPos(hwnd, topMost ? HWND_TOPMOST : IntPtr.Zero, 0, 0, s_coverW, s_coverH,
-                    SWP_SHOWWINDOW | SWP_NOACTIVATE);
-                s_lockPos = true;
-            }
+                SetWindowPos(hwnd, topMost ? HWND_TOPMOST : IntPtr.Zero, 0, 0,
+                    Screen.currentResolution.width, Screen.currentResolution.height, SWP_SHOWWINDOW);
             else if (topMost)
                 SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
 
-            // ⚠️ 这个钩子现在【必须挂】——它负责阻止窗口被系统当成标题栏拖走。
-            //    以前由 useHitTestHook 控制（默认关），结果拖动小白 = 拖动整个窗口。
             InstallWndProc();
 
             if (applied == 0)
@@ -448,16 +277,6 @@ namespace PetFramework
             if (applied < applyRetryFrames) { ApplyTransparency(); return; }
             if (hwnd == IntPtr.Zero) return;
 
-            // ★ 定期把窗口钉回 (0,0,屏幕分辨率)。
-            //   实测踩过：窗口被 Unity/系统恢复成 (1488,1274) 这种偏移位置，
-            //   窗口本身 2880x1800 大部分在屏幕外 ⇒ 小白看起来能"走出屏幕"（其实是窗口不在原点了），
-            //   鼠标坐标也跟着错位。每 2 秒校正一次，成本极低。
-            if (coverFullScreen && Time.unscaledTime >= nextCoverCheck)
-            {
-                nextCoverCheck = Time.unscaledTime + 2f;
-                EnsureCoverFullScreen();
-            }
-
             bool near = CursorNearPet(petPadPixels);
             // ⚠️ 这里【故意不看“左键是否按住”】。以前一旦按住左键就把整块全屏窗口变成可命中，
             // 结果是拖动期间整个桌面的鼠标输入都被我们抢走（别的程序拖不动东西），
@@ -481,33 +300,8 @@ namespace PetFramework
             //    光标在面板上 ⇒ 关穿透（面板可点）；其余任何地方 ⇒ 开穿透（桌面可点）。
             //    WM_NCHITTEST 钩子继续保留，作为面板内部再细分的第二道保险。
             var mgr = PetWindowManager.Instance;
-            var ws = PetFramework.Workspace.WorkspaceUI.Instance;
-            bool wsOpen = ws != null && ws.IsOpen;
-            bool uiOpen = (mgr != null && mgr.IsDashboardOpen) || wsOpen;
-            bool overPanel = (mgr != null && mgr.IsDashboardOpen && CursorOverDashboard(mgr))
-                          || (wsOpen && CursorOverWorkspace(ws));
-
-            // ⚠️ 拖动窗口时，光标很容易被“夹”到面板外（面板卡在边界上、光标继续走），
-            //    这时如果按坐标判成“面板外 ⇒ 穿透”，鼠标抬起事件就送给桌面了，
-            //    EventSystem 会一直以为还按着 —— 表现就是「只能拖动一次，之后按钮全点不动」。
-            //    所以：只要鼠标键还按着，或者光标正压在任何 uGUI 控件上，就一律不穿透。
-            bool holdingMouse = Input.GetMouseButton(0) || Input.GetMouseButton(1) || Input.GetMouseButton(2);
-            // ⚠️ 不能用 EventSystem.IsPointerOverGameObject()：场景里有一块【全屏透明】的
-            //    DragMoveCanvas/WindowMoveHandle（用来拖整个窗口的），它让这个函数永远返回 true，
-            //    结果整窗永久不穿透 —— 桌面上点菜单栏/别的程序全都点不动。
-            //    只认我们自己的面板矩形 + “鼠标正按着”这两个条件。
-            if (uiOpen && holdingMouse) overPanel = true;
-            bool overUI = false;
-
-            // 诊断用：工作区开着时每秒打一行，排查“整窗点不动”（默认关，需要时在 Inspector 勾上）
-            if (wsDiag && wsOpen && Time.unscaledTime >= nextWsDiag)
-            {
-                nextWsDiag = Time.unscaledTime + 1f;
-                Debug.Log("[TW] wsOpen overPanel=" + overPanel + " overUI=" + overUI + " holding=" + holdingMouse
-                          + " near=" + near + " screen=" + Screen.width + "x" + Screen.height
-                          + " mouse=" + Input.mousePosition.ToString("F0")
-                          + " mouseInPanel=" + (ws != null && ws.ContainsScreenPoint(Input.mousePosition)));
-            }
+            bool uiOpen = mgr != null && mgr.IsDashboardOpen;
+            bool overPanel = uiOpen && CursorOverDashboard(mgr);
             // 面板开着时【只看光标】：在面板上或小白身上 ⇒ 不穿透；其余 ⇒ 穿透给桌面。
             // 注意不能再把 mouseOverPet 算进来 —— 面板打开时它是 true，会把整窗永久锁成可点。
             bool wantThrough = uiOpen
@@ -612,24 +406,14 @@ namespace PetFramework
             if (c == null) return false;
             var pet = FindPet();
             if (pet == null) return false;
-            // ⚠️ 不能只取「第一个 Renderer」：运行时生成的特效/水球平时缩放是 0，
-            //    正好排在最前面，包围盒退化成一个点，命中区就没了。
-            //    这里取【所有有效渲染器】的并集。
-            Bounds b = new Bounds();
-            bool has = false;
-            var renderers = pet.GetComponentsInChildren<Renderer>();
-            for (int i = 0; i < renderers.Length; i++)
-            {
-                var rr = renderers[i];
-                if (rr == null || !rr.enabled || !rr.gameObject.activeInHierarchy) continue;
-                if (rr.bounds.size.sqrMagnitude < 0.0001f) continue;
-                if (!has) { b = rr.bounds; has = true; }
-                else b.Encapsulate(rr.bounds);
-            }
-            if (!has) return false;
+            var r = pet.GetComponentInChildren<Renderer>();
+            if (r == null) return false;
 
-            Vector2 cur = CursorToUnity();
+            POINT p;
+            if (!GetCursorPos(out p)) return false;
+            Vector2 cur = new Vector2(p.x, Screen.height - p.y);
 
+            Bounds b = r.bounds;
             Vector3 cc = b.center, e = b.extents;
             Vector2 min = new Vector2(float.MaxValue, float.MaxValue), max = new Vector2(float.MinValue, float.MinValue);
             for (int i = 0; i < 8; i++)

@@ -63,9 +63,7 @@ namespace PetFramework.Tools
         /// <summary>需要确认的工具先问一句。返回 true = 允许执行。</summary>
         public static IEnumerator Confirm(ToolDescriptor tool, string argsJson, Action<bool> done)
         {
-            // 只读工具直接放行：看一眼 / 列目录 / 查状态这类操作弹窗只会烦人。
-            // （requireConfirm 仍然保留给真正的修改类工具）
-            if (tool == null || !tool.requireConfirm || tool.readOnly) { done(true); yield break; }
+            if (tool == null || !tool.requireConfirm) { done(true); yield break; }
 
             bool answered = false, allow = false;
             ToolConfirmUI.Ask(tool, argsJson, a => { answered = true; allow = a; });

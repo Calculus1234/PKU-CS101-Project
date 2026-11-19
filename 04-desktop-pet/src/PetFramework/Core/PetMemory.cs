@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using UnityEngine;
 
 namespace PetFramework
@@ -27,11 +26,6 @@ namespace PetFramework
         public List<string> longTerm = new List<string>();  // 长期记忆（每条 <= 50 字）
         public List<PetRule> rules = new List<PetRule>();   // ★ 行为约定（主人训练出来的）
         public long lastForgetTicks = 0;                    // 上次遗忘的 UTC ticks
-
-        // ★ 上下文压缩：history 仍然完整保留给用户看，
-        //   AI 那边只喂 [chatSummary] + 最近若干轮。
-        public string chatSummary = "";                     // 更早对话的压缩摘要
-        public int summaryUpto = 0;                         // history 里前多少条已被压缩
     }
 
     /// <summary>
@@ -72,28 +66,7 @@ namespace PetFramework
             {
                 string dir = string.IsNullOrEmpty(memoryDir) ? PetPathUtil.ExeDir() : memoryDir;
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                // ★ 每个桌宠一份自己的记忆文件：PetMemory_<名字>.json
-                //   （以前是共用的 PetMemory.json，几个桌宠放同一个目录会互相覆盖）
-                string pet = PetProfileConfig.PetName;
-                string safe = string.IsNullOrEmpty(pet) ? "Pet" : pet.Trim();
-                foreach (char c in Path.GetInvalidFileNameChars()) safe = safe.Replace(c, '_');
-                if (safe.Length > 24) safe = safe.Substring(0, 24);
-
-                filePath = Path.Combine(dir, "PetMemory_" + safe + ".json");
-
-                // 迁移：老文件叫 PetMemory.json（有的工程还把它放在 D:\Ollama\OllamaModels）
-                if (!File.Exists(filePath))
-                {
-                    string legacySameDir = Path.Combine(dir, "PetMemory.json");
-                    string legacyOllama = @"D:\Ollama\OllamaModels\PetMemory.json";
-                    try
-                    {
-                        if (File.Exists(legacySameDir)) File.Copy(legacySameDir, filePath);
-                        else if (File.Exists(legacyOllama)) File.Copy(legacyOllama, filePath);
-                    }
-                    catch (Exception em) { Debug.LogWarning("[PetMemory] 迁移旧记忆失败：" + em.Message); }
-                }
+                filePath = Path.Combine(dir, "PetMemory.json");
             }
             catch (Exception e)
             {
@@ -119,22 +92,7 @@ namespace PetFramework
         // ---------- 对话读写 ----------
         public void AddTurn(string role, string text)
         {
-            // 不把「AI 怎么操控模型」的技术行写进用户可见的历史
-            string clean = TextTools.StripToolSyntax(text);
-            if (string.IsNullOrEmpty(clean))
-            {
-                // 只调了工具、没有说话 ⇒ 不记这一轮（否则会出现一屏 play_animation(...)）
-                return;
-            }
-            // ★ 主动搭话如果和上一条内容一样，就别记了。
-            //   模型反复念叨同一句（"大哥正在 XX 呢！"）会在聊天页刷屏，也会反过来强化这个循环。
-            if (role.Contains("主动") && data.history.Count > 0)
-            {
-                string last = data.history[data.history.Count - 1];
-                if (last.EndsWith(": " + clean, StringComparison.Ordinal)) return;
-            }
-
-            data.history.Add(role + ": " + clean);
+            data.history.Add(role + ": " + text);
             if (data.history.Count > maxHistory) SummarizeIfNeeded();
             Save();
         }
@@ -149,42 +107,6 @@ namespace PetFramework
             AddTurn(PetProfileConfig.PetName + "（主动）", text);
         }
         public List<string> GetHistory() { return new List<string>(data.history); }
-
-        // ---------- 上下文压缩（用户看到的历史不变，喂给 AI 的变短） ----------
-
-        public string GetChatSummary() { return data.chatSummary ?? ""; }
-        public int SummaryUpto { get { return Mathf.Clamp(data.summaryUpto, 0, data.history.Count); } }
-
-        /// <summary>
-        /// 把「超出 keep 轮之外」的旧对话折叠进摘要。
-        /// 纯本地抽取式压缩：不花 token、不占请求锁、瞬间完成。
-        /// ⚠️ 只影响喂给模型的内容；data.history 原样保留，UI 仍然显示完整历史。
-        /// </summary>
-        public void CompactHistory(int keep = 14)
-        {
-            keep = Mathf.Max(4, keep);
-            int from = SummaryUpto;
-            int end = data.history.Count - keep;
-            if (end - from < 6) return;      // 积得不够多，先不动
-
-            var sb = new StringBuilder(data.chatSummary ?? "");
-            for (int i = from; i < end; i++)
-            {
-                string turn = data.history[i];
-                if (string.IsNullOrEmpty(turn)) continue;
-                string t = TextTools.StripToolSyntax(turn);
-                if (string.IsNullOrEmpty(t)) continue;
-                if (t.Length > 60) t = t.Substring(0, 60) + "…";
-                if (sb.Length > 0) sb.Append("；");
-                sb.Append(t);
-            }
-            string s = sb.ToString();
-            if (s.Length > 1200) s = "…" + s.Substring(s.Length - 1200);   // 留最近的
-            data.chatSummary = s;
-            data.summaryUpto = end;
-            Save();
-            Debug.Log("[PetMemory] 上下文压缩：前 " + end + " 条折叠成 " + s.Length + " 字摘要");
-        }
         public List<string> GetLongTerm() { return new List<string>(data.longTerm); }
         public int HistoryCount { get { return data.history.Count; } }
         public int LongTermCount { get { return data.longTerm.Count; } }
@@ -270,10 +192,6 @@ namespace PetFramework
             if (cut <= 0) return;
             var toSum = data.history.GetRange(0, cut);
             data.history.RemoveRange(0, cut);
-            // ⚠️ 从头部删了 cut 条 ⇒ 压缩游标必须跟着往前挪，
-            //    否则 summaryUpto 会指到数组末尾，等于“所有历史都压缩过了”，
-            //    模型就再也看不到最近对话（失忆）。
-            data.summaryUpto = Mathf.Max(0, data.summaryUpto - cut);
             if (onSummarize != null) onSummarize(toSum, ReceiveSummary);
             else ReceiveSummary(LocalFallbackSummary(toSum));
         }
