@@ -1,0 +1,375 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60997c1fc4210b94ea5cbad49b54ae2a, type: 3}
+  m_Name: FurConfig_WhiteTiger
+  m_EditorClassIdentifier: 
+  presetName: "\u6BDB\u53D1\u5F62\u6001 (ShellFur)"
+  description: "\u591A\u5C42\u58F3\u5F0F\u6BDB\u53D1\u3002\u9002\u5408\u767D\u864E\u3001\u96EA\u8C79\u3001\u72D0\u72F8\u7B49\u6BDB\u8338\u8338\u7684\u5F62\u6001\u3002"
+  parameters:
+  - key: TotalShellStep
+    label: "\u6BDB\u957F Total Shell Step"
+    group: "\u6BDB\u7684\u957F\u5EA6\u4E0E\u5C42\u95F4\u8DDD"
+    tip: "\u8D8A\u5927\u6BDB\u8D8A\u957F\uFF0C\u592A\u5927\u4F1A\u53D8\u6210\u523A\u732C"
+    kind: 0
+    target: 0
+    prop: _TotalShellStep
+    prop2: 
+    min: 0
+    max: 0.3
+    wholeNumbers: 0
+    def: 0.045
+    value: 0.045
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: ShellAmount
+    label: "\u5C42\u6570 Shell Amount"
+    group: "\u6BDB\u7684\u957F\u5EA6\u4E0E\u5C42\u95F4\u8DDD"
+    tip: "\u5C42\u6570\u8D8A\u591A\u8D8A\u7EC6\u817B\uFF0C\u4F46\u8D8A\u8D39\u6027\u80FD"
+    kind: 1
+    target: 0
+    prop: _ShellAmount
+    prop2: 
+    min: 4
+    max: 48
+    wholeNumbers: 1
+    def: 7
+    value: 7
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: AlphaCutout
+    label: "\u88C1\u526A Fur Cutout"
+    group: "\u6BDB\u7684\u5F62\u6001"
+    tip: "\u8D8A\u5C0F\u6BDB\u8D8A\u788E\u8D8A\u84EC\u677E"
+    kind: 0
+    target: 0
+    prop: _AlphaCutout
+    prop2: 
+    min: 0.05
+    max: 0.5
+    wholeNumbers: 0
+    def: 0.1539286
+    value: 0.1539286
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: FurScale
+    label: "\u968F\u673A\u5EA6 Noise Scale"
+    group: "\u6BDB\u7684\u5F62\u6001"
+    tip: "\u6BDB\u7684\u968F\u673A\u5206\u5E03\u5BC6\u5EA6"
+    kind: 0
+    target: 0
+    prop: _FurScale
+    prop2: 
+    min: 0
+    max: 10
+    wholeNumbers: 0
+    def: 2
+    value: 2
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: FurLengthIntensity
+    label: "\u957F\u5EA6\u500D\u7387 Length Intensity"
+    group: "\u6BDB\u7684\u5F62\u6001"
+    tip: 
+    kind: 0
+    target: 0
+    prop: _FurLengthIntensity
+    prop2: 
+    min: 0.01
+    max: 5
+    wholeNumbers: 0
+    def: 0.9881191
+    value: 0.9881191
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: RootColorGray
+    label: "\u6BDB\u6839\u4EAE\u5EA6 Root"
+    group: "\u989C\u8272"
+    tip: "\u538B\u4F4E\u6BDB\u6839 = \u6709\u5C42\u6B21\u611F\uFF1B1 = \u7EAF\u767D"
+    kind: 3
+    target: 0
+    prop: _RootColor
+    prop2: 
+    min: 0.2
+    max: 1.2
+    wholeNumbers: 0
+    def: 1
+    value: 1
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: TipColorGray
+    label: "\u6BDB\u5C16\u4EAE\u5EA6 Tip"
+    group: "\u989C\u8272"
+    tip: "\u6BDB\u5C16\u4E00\u822C\u6BD4\u6BDB\u6839\u4EAE"
+    kind: 3
+    target: 0
+    prop: _TipColor
+    prop2: 
+    min: 0.2
+    max: 1.2
+    wholeNumbers: 0
+    def: 0.9976191
+    value: 0.9976191
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: Smoothness
+    label: "\u5149\u6ED1\u5EA6 Smoothness"
+    group: "\u53CD\u5149"
+    tip: "\u26A0 \u7269\u7406\u5934\u53D1\u6A21\u5F0F\u4E0B\u8FD9\u4E00\u9879\u65E0\u6548\uFF0C\u7528\u4E0B\u9762\u4E24\u4E2A"
+    kind: 1
+    target: 0
+    prop: _Smoothness
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 1
+    def: 0
+    value: 0
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: RootSmoothness
+    label: "\u6BDB\u6839/\u88E4\u5B50 \u5149\u6ED1 Root Smooth"
+    group: "\u53CD\u5149"
+    tip: "\u7269\u7406\u5934\u53D1\u6A21\u5F0F\u7684\u6709\u6548\u9879"
+    kind: 0
+    target: 0
+    prop: _RootSmoothness
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 0.6023809
+    value: 0.6023809
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: TipSmoothness
+    label: "\u6BDB\u5C16/\u88E4\u5B50 \u5149\u6ED1 Tip Smooth"
+    group: "\u53CD\u5149"
+    tip: "\u7269\u7406\u5934\u53D1\u6A21\u5F0F\u7684\u6709\u6548\u9879"
+    kind: 0
+    target: 0
+    prop: _TipSmoothness
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 0.4952381
+    value: 0.4952381
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: NoFurMatte
+    label: "\u6CA1\u6BDB\u5904\u54D1\u5149\uFF08\u6CBB\u88E4\u5B50\u53CD\u5149\uFF09"
+    group: "\u53CD\u5149"
+    tip: "1 = \u77ED\u88E4\u7B49\u6CA1\u6BDB\u7684\u5730\u65B9\u5B8C\u5168\u54D1\u5149\uFF1B0
+      = \u5173\u6389"
+    kind: 0
+    target: 0
+    prop: _NoFurMatte
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 1
+    value: 1
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: RimLightIntensity
+    label: "\u8FB9\u7F18\u5149\u5F3A\u5EA6 Rim"
+    group: "\u8F6E\u5ED3\u5149"
+    tip: "\u526A\u5F71\u7684\u53D1\u5149\u8F6E\u5ED3\uFF0C1.5~2.0 \u6BD4\u8F83\u81EA\u7136"
+    kind: 0
+    target: 0
+    prop: _RimLightIntensity
+    prop2: 
+    min: 0
+    max: 3
+    wholeNumbers: 0
+    def: 1.8
+    value: 1.8
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: RimLightPower
+    label: "\u8FB9\u7F18\u5149\u6536\u7A84 Rim Power"
+    group: "\u8F6E\u5ED3\u5149"
+    tip: "\u8D8A\u5927\u8D8A\u53EA\u8D34\u7740\u8F6E\u5ED3\uFF1B10 \u51E0\u4E4E\u770B\u4E0D\u89C1"
+    kind: 0
+    target: 0
+    prop: _RimLightPower
+    prop2: 
+    min: 1
+    max: 10
+    wholeNumbers: 0
+    def: 2.492857
+    value: 2.492857
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: Backlit
+    label: "\u900F\u5149 Backlit"
+    group: "\u8F6E\u5ED3\u5149"
+    tip: "\u6BDB\u7684\u900F\u5149\u611F"
+    kind: 0
+    target: 0
+    prop: _Backlit
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 0.35
+    value: 0.35
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: AlphaToCoverage
+    label: "MSAA \u8F6F\u8FB9 Alpha-To-Coverage"
+    group: "\u8F6F\u8FB9"
+    tip: "\u5F00\u4E86\u6BDB\u8FB9\u66F4\u67D4\u548C"
+    kind: 6
+    target: 0
+    prop: _ALPHATEST_ON
+    prop2: _AlphaToCoverageOn
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 1
+    value: 1
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: LightRotX
+    label: "\u4E3B\u5149\u4FEF\u4EF0"
+    group: "\u5149\u7167"
+    tip: 
+    kind: 0
+    target: 1
+    prop: 
+    prop2: 
+    min: 0
+    max: 89
+    wholeNumbers: 0
+    def: 45.00018
+    value: 45.00018
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: LightRotY
+    label: "\u4E3B\u5149\u6C34\u5E73"
+    group: "\u5149\u7167"
+    tip: 
+    kind: 0
+    target: 2
+    prop: 
+    prop2: 
+    min: 0
+    max: 360
+    wholeNumbers: 0
+    def: 63.85713
+    value: 63.85713
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: LightIntensity
+    label: "\u4E3B\u5149\u5F3A\u5EA6"
+    group: "\u5149\u7167"
+    tip: 
+    kind: 0
+    target: 3
+    prop: 
+    prop2: 
+    min: 0
+    max: 3
+    wholeNumbers: 0
+    def: 0.9
+    value: 0.9
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: AmbientIntensity
+    label: "\u73AF\u5883\u5149"
+    group: "\u5149\u7167"
+    tip: 
+    kind: 0
+    target: 4
+    prop: 
+    prop2: 
+    min: 0
+    max: 2
+    wholeNumbers: 0
+    def: 0.35
+    value: 0.35
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: ViewLock
+    label: "\u9501\u5B9A\u89C6\u7EBF\u65B9\u5411\uFF08\u8D70\u5230\u5C4F\u5E55\u54EA\u90FD\u53D7\u5149\u4E00\u81F4\uFF09"
+    group: "\u5C4F\u5E55\u4F4D\u7F6E\u8865\u507F"
+    tip: "\u89E3\u51B3\u300C\u5C0F\u767D\u8D70\u5230\u5C4F\u5E55\u4E0D\u540C\u4F4D\u7F6E\u65F6\u660E\u6697\u4E0D\u540C\u300D"
+    kind: 2
+    target: 0
+    prop: _FurViewLock
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 1
+    value: 1
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0, y: 0, z: 1}
+    vector: {x: 0, y: 0, z: 1}
+  - key: LockedViewDir
+    label: "\u9501\u5B9A\u65B9\u5411\u5411\u91CF"
+    group: "\u5C4F\u5E55\u4F4D\u7F6E\u8865\u507F"
+    tip: "\u7528\u4E0B\u9762\u7684\u89D2\u5EA6\u6ED1\u6746\u8C03\uFF0C\u4E0D\u7528\u624B\u6539"
+    kind: 5
+    target: 0
+    prop: _FurLockedViewDir
+    prop2: 
+    min: 0
+    max: 1
+    wholeNumbers: 0
+    def: 0
+    value: 0
+    defColor: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 1}
+    defVector: {x: 0.4914971, y: 0.2425291, z: 0.8364271}
+    vector: {x: 0.4914971, y: 0.2425291, z: 0.8364271}

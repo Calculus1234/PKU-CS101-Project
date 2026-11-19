@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------- .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# 保留 Poker 的工程文件（它们是手写的，不是 Unity 生成的）
+!02-poker-solver/src/**/*.csproj
+
+# ---------------------------------------------------------------- Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+.vscode/
+.idea/
+
+# Unity 自动生成的工程文件
+*.unityproj
+*.booproj
+*.pidb
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.svd
+sysinfo.txt
+crashlytics-build.properties
+
+# 构建产物（体积大，走 Release）
+*.apk
+*.aab
+*.unitypackage
+*.exe
+
+# ---------------------------------------------------------------- 大文件
+# 模型 / 音频 / 视频不进仓库
+*.fbx
+*.FBX
+*.psd
+*.wav
+*.mp3
+*.mp4
+*.mov
+
+# ---------------------------------------------------------------- 系统
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------- 本地配置
+# 密钥、账号、API key 一律不提交
+config.local.json
+*.secret
+*_api_key*

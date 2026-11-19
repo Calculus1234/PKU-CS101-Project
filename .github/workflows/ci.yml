@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  poker-solver:
+    name: 解牌器 · 编译 + 回归测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build 02-poker-solver/src/Cli/PokerSolver.Cli.csproj -c Release
+
+      # 8 个用例：小局面 + 4 张挑战局 + 20v14。任何结论不对都会让 CI 失败。
+      - name: Regression tests
+        run: dotnet run --project 02-poker-solver/src/Cli -c Release -- --test
+
+      - name: Solve a dead-hand endgame
+        run: |
+          dotnet run --project 02-poker-solver/src/Cli -c Release -- \
+            "AA KK QQ JJ 1010 99 88 7 333" \
+            "大王 2222 10 99 8 77 66 5 4 3"

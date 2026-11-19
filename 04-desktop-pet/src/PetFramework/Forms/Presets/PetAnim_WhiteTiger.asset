@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c1c59cc9c0def74fb9ac34c7704197d, type: 3}
+  m_Name: PetAnim_WhiteTiger
+  m_EditorClassIdentifier: 
+  baseController: {fileID: 9100000, guid: 5f89439deb9b9844ab3963562d3d7e1e, type: 2}
+  slots:
+  - slot: Idle
+    clip: {fileID: 0}
+  - slot: Walk
+    clip: {fileID: 0}
+  - slot: Run
+    clip: {fileID: 0}
+  - slot: Drag
+    clip: {fileID: 0}
+  - slot: Drop
+    clip: {fileID: 0}
+  - slot: Pet
+    clip: {fileID: 0}
+  - slot: Jump
+    clip: {fileID: 0}
+  - slot: LookBack
+    clip: {fileID: 0}
+  - slot: Sit
+    clip: {fileID: 0}
+  - slot: Sleep
+    clip: {fileID: 0}
+  - slot: Talk
+    clip: {fileID: 0}
+  transitionSeconds: 0.4
