@@ -54,7 +54,7 @@
 | :--- | :--- | :--- |
 | 解牌器 | `PokerSolver-PC-v1.0.zip` | 解压双击 `PokerSolver.exe` |
 | 解牌器 | `PokerSolver-Android-v1.0.apk` | Android 7.0+ 直接安装 |
-| 暗棋引擎 | `Chess-Windows64.zip` | 解压双击 `Chess.exe` 对局 |
+| 暗棋引擎 | `Chess-Windows64-v102.zip` | 解压双击 `Chess.exe` 对局 |
 | 桌面宠物 | `Furina.zip` | 解压运行；AI 对话需自备 Key，不填也能用基础功能 |
 | 《大限将至》 | — | **不在 Release 中**，请到 itch.io 下载 |
 

@@ -21,7 +21,7 @@
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :--- |
-| Windows | `Chess-Windows64.zip` | 解压双击 `Chess.exe`，直接对局 |
+| Windows | `Chess-Windows64-v102.zip` | 解压双击 `Chess.exe`，直接对局 |
 
 > 本构建对应 **v102 源码**（2026-11-10）。后续源码有实验性改动，
 > 记录在 [`01-chess-engine/docs/开发记录.md`](../01-chess-engine/docs/开发记录.md)，未包含在此构建中。
