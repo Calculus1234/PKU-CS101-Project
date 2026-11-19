@@ -116,7 +116,7 @@ BeliefState：每个敌子一个 7 维概率 + 可能集掩码
 | 对手风格 | 胜率 |
 | :--- | :--- |
 | Aggressive | 98% |
-| Defensive | 72~82%（最大短板） |
+| Defensive | 72–82%（最大短板） |
 | Materialist | 78% |
 | Positional | 86% |
 | Reckless | 90% |
@@ -167,7 +167,7 @@ DOTNET="D:/Unity/2022.3.62f3c1/Editor/Data/NetCoreRuntime/dotnet.exe"
 ## 局限
 
 1. **对本人胜率仍低于 30%**——模型的地板还不够高。
-2. **Defensive 风格只有 72~82%**，是最大短板。
+2. **Defensive 风格只有 72–82%**，是最大短板。
 3. **wall-clock 搜索导致结果不完全可复现**：机器负载会改变搜索深度，进而改变走法。
 4. **移动端降配**：深度和时间都压缩，胜率会下降。
 

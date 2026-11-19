@@ -62,7 +62,7 @@
 > 完整构建 **3.87 GB**，超过 GitHub Release 单文件 2 GB 上限，所以走 itch.io。
 > 游戏内支持本地 AI 模型（默认 1.5B，需 8 GB 内存），无独显时**按 F9 切到云端 API**。
 
-详细说明见 [Release Notes](docs/RELEASE_v1.0.md)。
+详细说明见 [Releases](../../releases) 页面。
 
 ### 路线 B：从源码验证（解牌器算法）
 

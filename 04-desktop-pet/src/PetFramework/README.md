@@ -331,7 +331,7 @@ Python 的查找顺序是 **① 组件里显式填的路径 → ② EXE 旁的 `
 - `mode`：`chat`（执行完就结束，走动说话用）/ `agent`（结果回传给模型，干活用）
 - `command: "python"` 会自动解析到随包的 `PythonEnv\python.exe`，目标机器**不需要装 Python**
 - 外部工具**默认全局关闭**；`requireConfirm: true` 时每次执行前都会弹窗
-- `maxToolRounds` 默认 2、强制夹在 1~3，防止死循环烧 token
+- `maxToolRounds` 默认 2、强制夹在 1–3，防止死循环烧 token
 
 ### 9.2 安全边界
 
