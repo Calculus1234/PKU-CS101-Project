@@ -12,7 +12,7 @@
 ## 还原步骤
 
 1. 用 Unity Hub 新建一个 **3D (URP)** 工程。
-2. 把 `src/Core/` 下的 5 个文件复制到 `Assets/Scripts/Poker/`：
+2. 把 `src/Core/` 下的全部 `.cs` 复制到 `Assets/Scripts/Poker/`：
    - `CardUtil.cs`
    - `MoveGen.cs`
    - `HandEval.cs`
@@ -28,7 +28,7 @@
 
 - 评审者拉到仓库后不用理解场景里的组件连线，**打开就能跑**。
 - 全部布局写在 C# 里，改字号/位置不用进 Inspector。
-- 代价是代码略长（`PokerSolverUI.cs` 约 1200 行），但可读性可控。
+- 代价是界面代码集中在 `PokerSolverUI.cs` 一个文件里，但可读性可控。
 
 ## 打包
 

@@ -3,7 +3,7 @@
 > **一套框架，四个角色。** 白虎「小白」、青龙、猫、芙宁娜共用这一份代码。
 > 内置三种渲染接口（毛发 / 鳞片 / 金属），加新角色、加新工具、加新面板，都不用改框架核心。
 
-**本目录提交的是框架，不是某一个具体桌宠。** 完整技术文档（369 行）见
+**本目录提交的是框架，不是某一个具体桌宠。** 完整技术文档见
 [`src/PetFramework/README.md`](src/PetFramework/README.md)。
 
 ---
@@ -105,7 +105,7 @@
 
 **加新形态不用改 UI 一行代码。**
 
-**扩展示例**：[`src/Examples/FurinaActionToolSource.cs`](src/Examples/FurinaActionToolSource.cs)（61 行）
+**扩展示例**：[`src/Examples/FurinaActionToolSource.cs`](src/Examples/FurinaActionToolSource.cs)
 ——把角色动作池接进工具注册表，每个 `do*` 动作 = 一个模型可调用的工具。
 
 ---
@@ -165,7 +165,7 @@
 
 ## 8. 代码规模
 
-**40 个 C# 文件**（`src/PetFramework/`），不含第三方包：
+**框架代码**（`src/PetFramework/`），不含第三方包：
 
 ```
 src/PetFramework/

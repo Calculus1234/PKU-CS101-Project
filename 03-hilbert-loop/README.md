@@ -43,7 +43,7 @@ NPC 不是简单的脚本触发器，而是有日程与动机的状态机：
 
 | 模块 | 代码目录 | 作用 |
 | :--- | :--- | :--- |
-| 日程与状态 | `src/Scripts/NPC/`（57 个文件） | 起床、搜证、开会、私聊、投票的状态流转 |
+| 日程与状态 | `src/Scripts/NPC/` | 起床、搜证、开会、私聊、投票的状态流转 |
 | **寻路（A\*）** | `src/Scripts/NPC/NPCNavigator.cs`、`Bridges/AStarBridge.cs` | 详见 [寻路算法说明](docs/寻路算法说明.md)：f=g+h、Octile 启发式、两级降级、自动开门、卡死保护 |
 | 行为树 | `src/Scripts/Core/` | 条件节点 + 动作节点的组合决策 |
 | 证据系统 | `src/Scripts/Evidence/` | 线索的获取、持有、展示与推理链 |
@@ -52,7 +52,7 @@ NPC 不是简单的脚本触发器，而是有日程与动机的状态机：
 
 ### 2. LLM 对话
 
-`src/Scripts/LLM/`（11 个文件）负责：
+`src/Scripts/LLM/` 负责：
 
 - 给 NPC 组装**人设 + 当前记忆 + 已知证据**的提示词；
 - 对话结果结构化，回写到 NPC 的记忆与关系网络；
@@ -87,7 +87,7 @@ NPC 不是简单的脚本触发器，而是有日程与动机的状态机：
 
 ## 代码规模
 
-**138 个 C# 文件**，按功能分为 13 个子模块（Audio / Bridges / Core / Evidence /
+按功能分为若干子模块（Audio / Bridges / Core / Evidence /
 Interaction / Items / LLM / Meeting / Monitor / NPC / Player / UI / Voting）。
 
 ---

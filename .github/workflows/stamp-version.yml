@@ -1,0 +1,34 @@
+name: Stamp version
+
+# 每次推送后，把当前提交的短 hash 写进主文档的「提交版本」一行。
+# 文档不用手改，push 完等 Actions 跑完就是最新 hash。
+# 自动提交带 [skip version]，不会再触发自己。
+
+on:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    if: ${{ !contains(github.event.head_commit.message, '[skip version]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write commit hash into main document
+        run: python3 tools/stamp_version.py
+
+      - name: Commit and push
+        run: |
+          if git diff --quiet; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "docs/大作业主文档.md"
+          git commit -m "chore: 自动写入提交版本 [skip version]"
+          git push

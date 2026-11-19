@@ -59,7 +59,7 @@
 
 > **《大限将至》已发布在 itch.io：** https://linzhongxike.itch.io/hilbert-loop
 >
-> 完整构建 **3.87 GB**，超过 GitHub Release 单文件 2 GB 上限，所以走 itch.io。
+> 完整构建超出 GitHub Release 单文件 2 GB 上限，所以走 itch.io。
 > 游戏内支持本地 AI 模型（默认 1.5B，需 8 GB 内存），无独显时**按 F9 切到云端 API**。
 
 详细说明见 [Releases](../../releases) 页面。
@@ -93,11 +93,11 @@ PKU-CS101-Project/
 ├── README.md                     本文件
 ├── LICENSE
 ├── docs/
-│   ├── 大作业主文档.md            提交给 Canvas 的 PDF 源文件
+│   ├── 大作业主文档.md            提交给 Canvas 的主文档
 │   └── screenshots/              各项目截图
 ├── 01-chess-engine/              主项目
 │   ├── README.md
-│   └── src/Scripts/              自写代码（37 个 .cs）
+│   └── src/Scripts/              自写代码
 ├── 02-poker-solver/              第二项目
 │   ├── README.md
 │   ├── src/Core/                 纯算法（零 Unity 依赖）
@@ -106,10 +106,10 @@ PKU-CS101-Project/
 │   └── examples/                 示例残局
 ├── 03-hilbert-loop/
 │   ├── README.md
-│   └── src/Scripts/              自写代码（138 个 .cs）
+│   └── src/Scripts/              自写代码
 └── 04-desktop-pet/
     ├── README.md
-    └── src/                      框架代码（40 个 .cs，来自 unitypackage 导出）
+    └── src/                      框架代码（来自 unitypackage 导出）
 ```
 
 **说明：仓库只包含自己写的代码与文档。** 第三方资源（Photon、A* Pathfinding、Unity 官方包、美术素材、构建产物）不在此仓库，原因见各子项目的 README。
