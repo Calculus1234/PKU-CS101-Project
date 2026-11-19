@@ -30,11 +30,14 @@
 
 ---
 
-### ③ 桌面宠物 Furina
+### ③ PetFramework 桌宠框架（Release 版本：Furina）
+
+**这一项交的是框架，不是单个桌宠。** 同一套 PetFramework 2.0 驱动了三只角色
+（白虎「小白」、芙宁娜、青龙）——换角色只需换模型 + 动画控制器 + 配置文件，框架代码零改动。
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :--- |
-| Windows | `Furina.zip` | 解压双击 `Furina.exe` |
+| Windows | `Furina.zip` | 解压双击 `Furina.exe`（框架 + 芙宁娜角色） |
 
 **注意：AI 对话需要自备 API Key。**
 
@@ -48,7 +51,7 @@
 
 **本游戏不在本 Release 中**——已发布在 **itch.io**：
 
-> 🔗 **itch.io 页面：**（请在此填入你的 itch.io 链接）
+> 🔗 **itch.io 页面：** https://linzhongxike.itch.io/hilbert-loop
 
 **为什么单独发布**：游戏包含 8.6 GB 美术资源，打包后体积过大；
 itch.io 是独立游戏的正式分发渠道，也能给项目带来流量。
