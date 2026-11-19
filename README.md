@@ -37,7 +37,7 @@
 
 ### 各项目的详细文档
 
-- 暗棋引擎：[算法导读](01-chess-engine/docs/引擎算法导读.md) · [开发记录与实验日志](01-chess-engine/docs/开发记录.md) · [项目说明](01-chess-engine/README.md)
+- 暗棋引擎：[项目说明](01-chess-engine/README.md)
 - 解牌器：[README（含算法与调优全过程）](02-poker-solver/README.md)
 - 游戏：[项目说明](03-hilbert-loop/README.md)
 - 桌宠：[项目说明](04-desktop-pet/README.md)
@@ -98,8 +98,7 @@ PKU-CS101-Project/
 │   └── screenshots/              各项目截图
 ├── 01-chess-engine/              主项目
 │   ├── README.md
-│   ├── src/Scripts/              自写代码（37 个 .cs）
-│   └── docs/                     算法导读 + 开发记录
+│   └── src/Scripts/              自写代码（37 个 .cs）
 ├── 02-poker-solver/              第二项目
 │   ├── README.md
 │   ├── src/Core/                 纯算法（零 Unity 依赖）

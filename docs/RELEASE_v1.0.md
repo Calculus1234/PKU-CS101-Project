@@ -23,8 +23,7 @@
 | :--- | :--- | :--- |
 | Windows | `Chess-Windows64-v102.zip` | 解压双击 `Chess.exe`，直接对局 |
 
-> 本构建对应 **v102 源码**（2026-11-10）。后续源码有实验性改动，
-> 记录在 [`01-chess-engine/docs/开发记录.md`](https://github.com/Calculus1234/PKU-CS101-Project/blob/main/01-chess-engine/docs/%E5%BC%80%E5%8F%91%E8%AE%B0%E5%BD%95.md)，未包含在此构建中。
+> 本构建对应 **v102 源码**（2026-11-10）。之后的实验性改动未包含在此构建中。
 
 **玩法**：双方棋子都带一个公开的「伪装标签」，真型隐藏。吃掉对方真王即获胜。
 
