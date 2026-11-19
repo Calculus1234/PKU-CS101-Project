@@ -2,7 +2,7 @@
 
 > **主项目：暗棋引擎**（算法深度最高）
 > **第二项目：斗地主残局解牌器**（性能优化过程最完整，且无需 Unity 即可验证）
-> 另外两个：游戏《大限将至》、桌面宠物，展示工程实现与产品落地。
+> 另外两个：游戏《大限将至》、桌宠框架（DesktopPetFramework），展示工程实现与产品落地。
 
 ---
 
@@ -55,7 +55,7 @@
 | 解牌器 | `PokerSolver-PC-v1.0.zip` | 解压双击 `PokerSolver.exe` |
 | 解牌器 | `PokerSolver-Android-v1.0.apk` | Android 7.0+ 直接安装 |
 | 暗棋引擎 | `Chess-Windows64-v102.zip` | 解压双击 `Chess.exe` 对局 |
-| 桌面宠物 | `Furina.zip` | 解压运行；AI 对话需自备 Key，不填也能用基础功能 |
+| 桌宠框架 | `Furina.zip` | 解压运行（框架 + 芙宁娜角色）；AI 对话需自备 Key，不填也能用基础功能 |
 | 《大限将至》 | — | **不在 Release 中**，请到 itch.io 下载 |
 
 > **《大限将至》已发布在 itch.io：** https://linzhongxike.itch.io/hilbert-loop
