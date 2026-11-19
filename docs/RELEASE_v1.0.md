@@ -24,7 +24,7 @@
 | Windows | `Chess-Windows64-v102.zip` | 解压双击 `Chess.exe`，直接对局 |
 
 > 本构建对应 **v102 源码**（2026-11-10）。后续源码有实验性改动，
-> 记录在 [`01-chess-engine/docs/开发记录.md`](../01-chess-engine/docs/开发记录.md)，未包含在此构建中。
+> 记录在 [`01-chess-engine/docs/开发记录.md`](https://github.com/Calculus1234/PKU-CS101-Project/blob/main/01-chess-engine/docs/%E5%BC%80%E5%8F%91%E8%AE%B0%E5%BD%95.md)，未包含在此构建中。
 
 **玩法**：双方棋子都带一个公开的「伪装标签」，真型隐藏。吃掉对方真王即获胜。
 
@@ -48,7 +48,7 @@
 
 ---
 
-### ④ 悬疑推理游戏《大限将至》（Hilbert Loop）
+### ④ 第一人称心理恐怖游戏《大限将至》（Hilbert Loop）
 
 **本游戏有完整的 Windows 构建，但不在本 Release 中——已发布在 itch.io：**
 
@@ -65,7 +65,7 @@
 无独立显卡时**在游戏里按 F9 切换到云端 API**（支持 GLM / OpenAI 兼容接口）。
 
 **技术要点**：NPC 行为树 + 状态机、A\* 寻路、LLM 双模式（本地/云端）、多结局系统。
-算法细节见 [`03-hilbert-loop/docs/寻路算法说明.md`](../03-hilbert-loop/docs/寻路算法说明.md)。
+算法细节见 [`03-hilbert-loop/docs/寻路算法说明.md`](https://github.com/Calculus1234/PKU-CS101-Project/blob/main/03-hilbert-loop/docs/%E5%AF%BB%E8%B7%AF%E7%AE%97%E6%B3%95%E8%AF%B4%E6%98%8E.md)。
 
 ---
 

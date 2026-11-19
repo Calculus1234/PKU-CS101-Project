@@ -26,7 +26,7 @@
 | :--- | :--- | :--- | :--- |
 | [`01-chess-engine`](01-chess-engine/) | 暗棋（international chess variant）AI 引擎 | 信念推断、采样期望搜索、αβ+PVS、根节点安全约束 | Unity 实机 + 无头对战脚本 |
 | [`02-poker-solver`](02-poker-solver/) | 斗地主单挑残局解牌器 | 位棋（bitboard）、布尔 negamax、置换表、并行分片 | **`dotnet run --test`，无需 Unity** |
-| [`03-hilbert-loop`](03-hilbert-loop/) | 悬疑推理游戏《大限将至》 | 行为树、状态机、LLM 对话、A* 寻路 | **itch.io 下载游玩** |
+| [`03-hilbert-loop`](03-hilbert-loop/) | 第一人称心理恐怖游戏《大限将至》 | 行为树、状态机、LLM 对话、A* 寻路 | **itch.io 下载游玩** |
 | [`04-desktop-pet`](04-desktop-pet/) | **DesktopPetFramework 桌宠通用框架** | 同一份代码驱动了**四个角色**（白虎 / 青龙 / 猫 / 芙宁娜）；内置毛发 / 鳞片 / 金属三种渲染接口；工具注册中心 + 3 秒热重载 | Windows 实机（Release 打包芙宁娜） |
 
 > **这一项交的是框架，不是某个具体桌宠。**
